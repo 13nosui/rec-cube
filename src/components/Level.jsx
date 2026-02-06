@@ -1,5 +1,6 @@
-import { RigidBody } from '@react-three/rapier';
+import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import { Grid } from '@react-three/drei';
+import { useGameStore } from '../stores/useGameStore';
 
 const GridPlane = ({ position, rotation }) => (
     <Grid
@@ -20,6 +21,7 @@ const GridPlane = ({ position, rotation }) => (
 
 export default function Level() {
     const size = 10;
+    const nextRoom = useGameStore((state) => state.nextRoom);
 
     return (
         <group>
@@ -42,7 +44,6 @@ export default function Level() {
             </RigidBody>
 
             {/* Walls */}
-            {/* North (z = -5) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size / 2, -size / 2 - 0.5]}>
                     <boxGeometry args={[size, size, 1]} />
@@ -51,7 +52,6 @@ export default function Level() {
                 <GridPlane position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} />
             </RigidBody>
 
-            {/* South (z = 5) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size / 2, size / 2 + 0.5]}>
                     <boxGeometry args={[size, size, 1]} />
@@ -60,7 +60,6 @@ export default function Level() {
                 <GridPlane position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} />
             </RigidBody>
 
-            {/* West (x = -5) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[-size / 2 - 0.5, size / 2, 0]}>
                     <boxGeometry args={[1, size, size]} />
@@ -69,7 +68,6 @@ export default function Level() {
                 <GridPlane position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} />
             </RigidBody>
 
-            {/* East (x = 5) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[size / 2 + 0.5, size / 2, 0]}>
                     <boxGeometry args={[1, size, size]} />
@@ -78,17 +76,40 @@ export default function Level() {
                 <GridPlane position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} />
             </RigidBody>
 
-            {/* Hatch Markers */}
-            <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[2, 2]} />
-                <meshStandardMaterial color="#000000" />
-                <Grid args={[2, 2]} cellSize={1} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="white" sectionColor="white" fadeDistance={50} />
-            </mesh>
-            <mesh position={[0, size - 0.01, 0]} rotation={[Math.PI / 2, 0, 0]}>
-                <planeGeometry args={[2, 2]} />
-                <meshStandardMaterial color="#000000" />
-                <Grid args={[2, 2]} cellSize={1} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="white" sectionColor="white" fadeDistance={50} />
-            </mesh>
+            {/* Hatch Markers & Sensors */}
+            <group>
+                <mesh position={[0, 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                    <planeGeometry args={[2, 2]} />
+                    <meshStandardMaterial color="#000000" />
+                    <Grid args={[2, 2]} cellSize={1} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="white" sectionColor="white" fadeDistance={50} />
+                </mesh>
+                <CuboidCollider
+                    sensor
+                    args={[1, 0.5, 1]}
+                    position={[0, 0.25, 0]}
+                    onIntersectionEnter={() => {
+                        console.log("Room Advanced");
+                        nextRoom();
+                    }}
+                />
+            </group>
+
+            <group>
+                <mesh position={[0, size - 0.01, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                    <planeGeometry args={[2, 2]} />
+                    <meshStandardMaterial color="#000000" />
+                    <Grid args={[2, 2]} cellSize={1} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="white" sectionColor="white" fadeDistance={50} />
+                </mesh>
+                <CuboidCollider
+                    sensor
+                    args={[1, 0.5, 1]}
+                    position={[0, size - 0.25, 0]}
+                    onIntersectionEnter={() => {
+                        console.log("Room Advanced");
+                        nextRoom();
+                    }}
+                />
+            </group>
         </group>
     );
 }

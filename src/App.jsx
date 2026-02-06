@@ -5,6 +5,7 @@ import { Physics } from '@react-three/rapier';
 
 import Player from './components/Player';
 import Level from './components/Level';
+import Traces from './components/Traces';
 import UI from './components/UI';
 
 const keyboardMap = [
@@ -29,6 +30,7 @@ function App() {
           <Physics gravity={[0, -9.81, 0]}>
             <Player />
             <Level />
+            <Traces />
           </Physics>
         </Suspense>
 
