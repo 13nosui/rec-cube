@@ -1,45 +1,42 @@
-import { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { KeyboardControls } from '@react-three/drei';
 import { Physics } from '@react-three/rapier';
-
+import { KeyboardControls } from '@react-three/drei';
+import { Suspense } from 'react';
 import Player from './components/Player';
 import Level from './components/Level';
-import Traces from './components/Traces';
 import UI from './components/UI';
+import Traces from './components/Traces';
+import Eyes from './components/Eyes';
 
-const keyboardMap = [
-  { name: 'forward', keys: ['ArrowUp', 'KeyW'] },
-  { name: 'backward', keys: ['ArrowDown', 'KeyS'] },
-  { name: 'left', keys: ['ArrowLeft', 'KeyA'] },
-  { name: 'right', keys: ['ArrowRight', 'KeyD'] },
-  { name: 'jump', keys: ['Space'] },
-];
+export default function App() {
+  const keyboardMap = [
+    { name: 'forward', keys: ['ArrowUp', 'w', 'W'] },
+    { name: 'backward', keys: ['ArrowDown', 's', 'S'] },
+    { name: 'left', keys: ['ArrowLeft', 'a', 'A'] },
+    { name: 'right', keys: ['ArrowRight', 'd', 'D'] },
+    { name: 'jump', keys: ['Space'] },
+  ];
 
-function App() {
   return (
     <KeyboardControls map={keyboardMap}>
       <Canvas
         shadows
+        camera={{ fov: 45 }}
         gl={{ antialias: false, powerPreference: "high-performance" }}
         dpr={1}
-        camera={{ fov: 45 }}
-        style={{ background: '#000000' }}
       >
+        <color attach="background" args={['#000000']} />
         <Suspense fallback={null}>
-          <Physics gravity={[0, -9.81, 0]}>
+          <Physics gravity={[0, -9.8, 0]}>
             <Player />
             <Level />
             <Traces />
+            <Eyes />
           </Physics>
+          <ambientLight intensity={0.5} />
         </Suspense>
-
-        <ambientLight intensity={0.5} />
-        <pointLight position={[0, 5, 0]} intensity={1} />
       </Canvas>
       <UI />
     </KeyboardControls>
   );
 }
-
-export default App;
