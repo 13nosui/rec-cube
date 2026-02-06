@@ -20,6 +20,8 @@ function App() {
     <KeyboardControls map={keyboardMap}>
       <Canvas
         shadows
+        gl={{ antialias: false, powerPreference: "high-performance" }}
+        dpr={1}
         camera={{ fov: 45 }}
         style={{ background: '#000000' }}
       >
