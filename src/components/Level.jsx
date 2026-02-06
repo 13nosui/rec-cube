@@ -51,20 +51,18 @@ const Hatch = ({ position, rotation }) => {
 
 export default function Level() {
     const size = 10;
+    const availableHatches = useGameStore((state) => state.availableHatches);
 
     return (
         <group>
             {/* --- 床 (Floor) --- */}
-            {/* 1. 物理判定（ツルツルの黒い板） */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, -0.5, 0]}>
                     <boxGeometry args={[size, 1, size]} />
                     <meshStandardMaterial color="#000000" />
                 </mesh>
             </RigidBody>
-            {/* 2. 見た目（グリッド） ※RigidBodyの外に出したことで衝突しなくなる */}
             <GridPlane position={[0, 0, 0]} rotation={[0, 0, 0]} />
-
 
             {/* --- 天井 (Ceiling) --- */}
             <RigidBody type="fixed" colliders="cuboid">
@@ -75,10 +73,7 @@ export default function Level() {
             </RigidBody>
             <GridPlane position={[0, size, 0]} rotation={[Math.PI, 0, 0]} />
 
-
             {/* --- 壁 (Walls) --- */}
-
-            {/* 奥 (-Z) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size / 2, -size / 2 - 0.5]}>
                     <boxGeometry args={[size, size, 1]} />
@@ -87,7 +82,6 @@ export default function Level() {
             </RigidBody>
             <GridPlane position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} />
 
-            {/* 手前 (+Z) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size / 2, size / 2 + 0.5]}>
                     <boxGeometry args={[size, size, 1]} />
@@ -96,7 +90,6 @@ export default function Level() {
             </RigidBody>
             <GridPlane position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} />
 
-            {/* 左 (-X) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[-size / 2 - 0.5, size / 2, 0]}>
                     <boxGeometry args={[1, size, size]} />
@@ -105,7 +98,6 @@ export default function Level() {
             </RigidBody>
             <GridPlane position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} />
 
-            {/* 右 (+X) */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[size / 2 + 0.5, size / 2, 0]}>
                     <boxGeometry args={[1, size, size]} />
@@ -114,13 +106,11 @@ export default function Level() {
             </RigidBody>
             <GridPlane position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} />
 
-
-            {/* --- ハッチ (壁の4方向に配置) --- */}
-            {/* 高さ y=2 (プレイヤーの目線の少し上) に配置 */}
-            <Hatch position={[0, 2, -size / 2 + 0.1]} rotation={[0, 0, 0]} /> {/* 奥 */}
-            <Hatch position={[0, 2, size / 2 - 0.1]} rotation={[0, Math.PI, 0]} /> {/* 手前 */}
-            <Hatch position={[-size / 2 + 0.1, 2, 0]} rotation={[0, Math.PI / 2, 0]} /> {/* 左 */}
-            <Hatch position={[size / 2 - 0.1, 2, 0]} rotation={[0, -Math.PI / 2, 0]} /> {/* 右 */}
+            {/* --- ハッチ (動的生成) --- */}
+            {availableHatches >= 1 && <Hatch position={[0, 2, -size / 2 + 0.1]} rotation={[0, 0, 0]} />} {/* 奥 */}
+            {availableHatches >= 2 && <Hatch position={[0, 2, size / 2 - 0.1]} rotation={[0, Math.PI, 0]} />} {/* 手前 */}
+            {availableHatches >= 3 && <Hatch position={[-size / 2 + 0.1, 2, 0]} rotation={[0, Math.PI / 2, 0]} />} {/* 左 */}
+            {availableHatches >= 4 && <Hatch position={[size / 2 - 0.1, 2, 0]} rotation={[0, -Math.PI / 2, 0]} />} {/* 右 */}
         </group>
     );
 }
