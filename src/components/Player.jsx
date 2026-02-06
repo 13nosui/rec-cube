@@ -6,8 +6,8 @@ import { RigidBody, CapsuleCollider } from '@react-three/rapier';
 import { useGameStore } from '../stores/useGameStore';
 
 const MOVE_SPEED = 5;
-const LOG_INTERVAL = 0.2;
-const GAZE_INTERVAL = 0.5;
+const LOG_INTERVAL = 0.2;  // 移動ログの記録間隔
+const GAZE_INTERVAL = 0.5; // 視線チェックの間隔
 
 export default function Player() {
     const rb = useRef();
@@ -15,7 +15,7 @@ export default function Player() {
     const [, getKeys] = useKeyboardControls();
     const [isLocked, setIsLocked] = useState(false);
 
-    // 【修正箇所】データを1つずつ取得する（これで無限ループが止まります）
+    // Storeからアクションを個別に取得（無限ループ回避のため）
     const addLog = useGameStore(state => state.addLog);
     const addGazeLog = useGameStore(state => state.addGazeLog);
     const addSystemLog = useGameStore(state => state.addSystemLog);
@@ -25,6 +25,10 @@ export default function Player() {
     const lastGazeTime = useRef(0);
     const lastFloor = useRef(floor);
 
+    // ★ 凝視判定用の新しい変数
+    const lastHitPoint = useRef(new THREE.Vector3(0, 0, 0));
+    const stareCount = useRef(0);
+
     useFrame((state, delta) => {
         if (!rb.current || !isLocked) return;
 
@@ -33,6 +37,7 @@ export default function Player() {
             rb.current.setTranslation({ x: 0, y: 2, z: 0 }, true);
             rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
             lastFloor.current = floor;
+            stareCount.current = 0; // カウンターリセット
             return;
         }
 
@@ -67,18 +72,38 @@ export default function Player() {
         if (lastGazeTime.current >= GAZE_INTERVAL) {
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
+            // 自分自身やグリッド以外のオブジェクトを探す
             const intersects = raycaster.intersectObjects(scene.children, true);
 
             if (intersects.length > 0) {
-                // 自分自身(player)を無視する
                 const hit = intersects.find(obj => obj.object.name !== "player" && obj.object.type !== "GridHelper");
 
                 if (hit && hit.distance < 15) {
+                    // 1. 視線データは常に記録（次の部屋の「目」のため）
                     addGazeLog(hit.point.toArray());
-                    if (Math.random() < 0.3) {
-                        addSystemLog("VISUAL CONTACT RECORDED.");
+
+                    // 2. 凝視判定（音とログのトリガー）
+                    // 前回の視点との距離を測る
+                    const dist = hit.point.distanceTo(lastHitPoint.current);
+
+                    // 視点が1m以内の範囲に留まっているなら「見つめている」と判定
+                    if (dist < 1.0) {
+                        stareCount.current += 1;
+                    } else {
+                        stareCount.current = 0; // 視線が動いたらリセット
+                    }
+
+                    // 今回の座標を保存
+                    lastHitPoint.current.copy(hit.point);
+
+                    // 0.5秒 x 4回 = 2秒間見つめ続けたら発動
+                    if (stareCount.current >= 4) {
+                        addSystemLog("GAZE FOCUS DETECTED."); // 「凝視を検知」
+                        stareCount.current = 0; // リセット（見続けると2秒ごとに鳴る）
                     }
                 }
+            } else {
+                stareCount.current = 0; // 虚空を見ている時はリセット
             }
             lastGazeTime.current = 0;
         }
@@ -96,6 +121,7 @@ export default function Player() {
                 type="dynamic"
             >
                 <CapsuleCollider args={[0.75, 0.4]} />
+                {/* Raycast無視用のダミーメッシュ */}
                 <mesh name="player" visible={false}>
                     <capsuleGeometry args={[0.4, 1.5]} />
                 </mesh>
