@@ -1,11 +1,10 @@
 import { useGameStore } from "../stores/useGameStore";
 
 export default function UI() {
-    const { floor, systemLogs, availableHatches } = useGameStore(state => ({
-        floor: state.floor,
-        systemLogs: state.systemLogs,
-        availableHatches: state.availableHatches
-    }));
+    // 【修正箇所】データを1つずつ取得する
+    const floor = useGameStore(state => state.floor);
+    const systemLogs = useGameStore(state => state.systemLogs);
+    const availableHatches = useGameStore(state => state.availableHatches);
 
     return (
         <div className="absolute top-0 left-0 w-full h-full pointer-events-none p-8 font-mono text-green-500 z-50 select-none">
@@ -30,7 +29,7 @@ export default function UI() {
                 </div>
             </div>
 
-            {/* 中央: クロスヘア（照準） */}
+            {/* 中央: クロスヘア */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-white/50 text-xl">
                 +
             </div>

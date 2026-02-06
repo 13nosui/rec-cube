@@ -11,17 +11,15 @@ const GAZE_INTERVAL = 0.5;
 
 export default function Player() {
     const rb = useRef();
-    const { camera, scene, raycaster } = useThree(); // Raycaster用に取得
+    const { camera, scene, raycaster } = useThree();
     const [, getKeys] = useKeyboardControls();
     const [isLocked, setIsLocked] = useState(false);
 
-    // Storeからアクションを取得
-    const { addLog, addGazeLog, addSystemLog, floor } = useGameStore(state => ({
-        addLog: state.addLog,
-        addGazeLog: state.addGazeLog,
-        addSystemLog: state.addSystemLog,
-        floor: state.floor
-    }));
+    // 【修正箇所】データを1つずつ取得する（これで無限ループが止まります）
+    const addLog = useGameStore(state => state.addLog);
+    const addGazeLog = useGameStore(state => state.addGazeLog);
+    const addSystemLog = useGameStore(state => state.addSystemLog);
+    const floor = useGameStore(state => state.floor);
 
     const lastLogTime = useRef(0);
     const lastGazeTime = useRef(0);
@@ -30,7 +28,7 @@ export default function Player() {
     useFrame((state, delta) => {
         if (!rb.current || !isLocked) return;
 
-        // 部屋移動リセット
+        // --- 部屋移動時のリセット ---
         if (floor !== lastFloor.current) {
             rb.current.setTranslation({ x: 0, y: 2, z: 0 }, true);
             rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -67,18 +65,16 @@ export default function Player() {
         // --- 視線検知 (Gaze) ---
         lastGazeTime.current += delta;
         if (lastGazeTime.current >= GAZE_INTERVAL) {
-            // 画面中央からRayを飛ばす
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            // player自身のコライダーに当たらないよう注意（レイヤー分けが理想だが簡易的に距離チェック）
+
             const intersects = raycaster.intersectObjects(scene.children, true);
 
             if (intersects.length > 0) {
-                const hit = intersects[0];
-                // 距離が近すぎず（自分自身）、遠すぎない（壁）場合
-                if (hit.distance > 1 && hit.distance < 15) {
-                    addGazeLog(hit.point.toArray());
+                // 自分自身(player)を無視する
+                const hit = intersects.find(obj => obj.object.name !== "player" && obj.object.type !== "GridHelper");
 
-                    // 【ここが重要】視線を検知したらログを出す（確率で）
+                if (hit && hit.distance < 15) {
+                    addGazeLog(hit.point.toArray());
                     if (Math.random() < 0.3) {
                         addSystemLog("VISUAL CONTACT RECORDED.");
                     }
@@ -100,6 +96,9 @@ export default function Player() {
                 type="dynamic"
             >
                 <CapsuleCollider args={[0.75, 0.4]} />
+                <mesh name="player" visible={false}>
+                    <capsuleGeometry args={[0.4, 1.5]} />
+                </mesh>
             </RigidBody>
         </>
     );
