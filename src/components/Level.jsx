@@ -2,9 +2,27 @@ import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import { Grid } from '@react-three/drei';
 import { useState, useEffect, useMemo } from 'react';
 import { useGameStore } from '../stores/useGameStore';
+// Radix UI Colorsのインポート
+import {
+    cyan, crimson, lime, purple, amber,
+    mint, indigo, sky, tomato, teal, violet, orange
+} from '@radix-ui/colors';
+
+// カラーパレットの定義 (フロアごとのローテーション順)
+const COLOR_SEQUENCE = [
+    cyan, crimson, lime, purple, amber,
+    mint, indigo, sky, tomato, teal, violet, orange
+];
+
+// ヘルパー: カラーオブジェクトから特定の色段階(step)を取得する
+// Radixの色は { cyan1: '...', cyan2: '...' } のようなオブジェクトなので、Valuesから取得
+const getThemeColor = (colorObj, step = 10) => {
+    return Object.values(colorObj)[step - 1];
+};
 
 // グリッド描画用のコンポーネント
-const GridPlane = ({ position, rotation }) => (
+// 【修正】colorプロパティを受け取るように変更
+const GridPlane = ({ position, rotation, color = "#ffffff" }) => (
     <Grid
         position={position}
         rotation={rotation}
@@ -13,8 +31,8 @@ const GridPlane = ({ position, rotation }) => (
         sectionThickness={1.5}
         cellSize={0.5}
         cellThickness={1}
-        cellColor="#ffffff"
-        sectionColor="#ffffff"
+        cellColor={color}     // Radixカラーを適用
+        sectionColor={color}  // Radixカラーを適用
         fadeDistance={50}
         fadeStrength={1}
         infiniteGrid={false}
@@ -25,7 +43,6 @@ const GridPlane = ({ position, rotation }) => (
 const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
     const setIsClimbing = useGameStore(state => state.setIsClimbing);
 
-    // はしごの「段（ラング）」を生成
     const rungs = useMemo(() => {
         const count = Math.floor(height / 0.4);
         return new Array(count).fill(0).map((_, i) => (
@@ -38,7 +55,6 @@ const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
 
     return (
         <group position={position} rotation={rotation}>
-            {/* 視覚的なはしご */}
             <group>
                 <mesh position={[-0.35, 0, 0]}>
                     <boxGeometry args={[0.05, height, 0.05]} />
@@ -51,7 +67,6 @@ const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
                 {rungs}
             </group>
 
-            {/* はしごセンサー */}
             <CuboidCollider
                 sensor
                 args={[0.4, height / 2, 0.4]}
@@ -110,8 +125,6 @@ const Hatch = ({ position, rotation }) => {
                 </mesh>
             </group>
 
-            {/* 【修正】センサー範囲を拡大 (args: [x, y, z] = [幅, 高さ, 奥行き]の半分) */}
-            {/* 奥行き(z)を 0.5 -> 1.5 に拡大して、はしごの位置まで届くようにする */}
             <CuboidCollider
                 sensor
                 args={[1.2, 1.2, 1.5]}
@@ -134,6 +147,15 @@ const Hatch = ({ position, rotation }) => {
 
 export default function Level() {
     const size = 10;
+    // ストアから現在のフロア数を取得
+    const floor = useGameStore(state => state.floor);
+
+    // フロアに応じた色を決定
+    const gridColor = useMemo(() => {
+        const colorObj = COLOR_SEQUENCE[(floor - 1) % COLOR_SEQUENCE.length];
+        // 暗い背景（黒）に対して映えるように Step 10 (明るく鮮やかな色) を使用
+        return getThemeColor(colorObj, 10);
+    }, [floor]);
 
     return (
         <group>
@@ -141,32 +163,33 @@ export default function Level() {
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshStandardMaterial color="#000000" /></mesh>
             </RigidBody>
-            <GridPlane position={[0, 0, 0]} rotation={[0, 0, 0]} />
+            {/* colorプロパティを渡す */}
+            <GridPlane position={[0, 0, 0]} rotation={[0, 0, 0]} color={gridColor} />
 
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshStandardMaterial color="#000000" /></mesh>
             </RigidBody>
-            <GridPlane position={[0, size, 0]} rotation={[Math.PI, 0, 0]} />
+            <GridPlane position={[0, size, 0]} rotation={[Math.PI, 0, 0]} color={gridColor} />
 
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size / 2, -size / 2 - 0.5]}><boxGeometry args={[size, size, 1]} /><meshStandardMaterial color="#000000" /></mesh>
             </RigidBody>
-            <GridPlane position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} />
+            <GridPlane position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} color={gridColor} />
 
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, size / 2, size / 2 + 0.5]}><boxGeometry args={[size, size, 1]} /><meshStandardMaterial color="#000000" /></mesh>
             </RigidBody>
-            <GridPlane position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} />
+            <GridPlane position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} color={gridColor} />
 
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[-size / 2 - 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
             </RigidBody>
-            <GridPlane position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} />
+            <GridPlane position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} color={gridColor} />
 
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
             </RigidBody>
-            <GridPlane position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} />
+            <GridPlane position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} color={gridColor} />
 
             {/* ハッチ */}
             <Hatch position={[0, size / 2, -size / 2 + 0.1]} rotation={[0, 0, 0]} />
