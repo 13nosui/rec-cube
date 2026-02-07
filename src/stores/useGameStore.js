@@ -14,6 +14,13 @@ const getThemeColor = (floor) => {
   return Object.values(colorObj)[9];
 };
 
+// 異常のバリエーション定義
+const ANOMALY_TYPES = [
+  'GHOST_FAST',   // 亡霊が高速で動く
+  'GHOST_STARE',  // 亡霊がじっとこちらを見ている
+  'EYES_CLUSTER'  // 壁に大量の目がある
+];
+
 export const useGameStore = create((set, get) => ({
   floor: 1,
   themeColor: getThemeColor(1),
@@ -33,29 +40,39 @@ export const useGameStore = create((set, get) => ({
   isPreviewMode: false,
   previewTarget: null,
   nextRoomStatus: 'SAFE',
+  anomalyType: null,
 
   enterPreviewMode: (target) => {
-    // 30%の確率で異常発生
-    const isAnomaly = Math.random() < 0.3;
+    // 【修正】動作確認用に確率を大幅にアップ (40% -> 80%)
+    const isAnomaly = Math.random() < 0.8;
+    let anomalyType = null;
+
+    if (isAnomaly) {
+      anomalyType = ANOMALY_TYPES[Math.floor(Math.random() * ANOMALY_TYPES.length)];
+      // 【追加】デバッグ用に何が発生したかログに出す
+      get().addSystemLog(`DEBUG: ${anomalyType}`);
+    } else {
+      get().addSystemLog("DEBUG: NORMAL (SAFE)");
+    }
+
     set({
       isPreviewMode: true,
       previewTarget: target,
-      nextRoomStatus: isAnomaly ? 'ANOMALY' : 'SAFE'
+      nextRoomStatus: isAnomaly ? 'ANOMALY' : 'SAFE',
+      anomalyType: anomalyType
     });
   },
 
   exitPreviewMode: () => {
-    set({ isPreviewMode: false, previewTarget: null });
+    set({ isPreviewMode: false, previewTarget: null, anomalyType: null });
     get().addSystemLog("CONNECTION TERMINATED.");
   },
 
-  // 【追加】部屋への侵入を確定するアクション
   confirmMovement: () => {
     const { nextRoomStatus, nextRoom, addSystemLog } = get();
 
     if (nextRoomStatus === 'ANOMALY') {
       // ゲームオーバー処理
-      // ログを出して初期階層(Floor 1)に戻す
       addSystemLog("CRITICAL ERROR: FATAL ANOMALY");
       addSystemLog("SYSTEM REBOOTING...");
 
@@ -66,17 +83,16 @@ export const useGameStore = create((set, get) => ({
         isPreviewMode: false,
         previewTarget: null,
         nextRoomStatus: 'SAFE',
+        anomalyType: null,
         currentMoveLogs: [],
         previousMoveLogs: [],
         roomStartTime: Date.now()
       });
     } else {
-      // 安全なら次の部屋へ
       addSystemLog("CONNECTION SECURE. MOVING...");
       nextRoom();
     }
   },
-  // --------------------------------------
 
   nextRoom: () => set((state) => {
     const hasMoveLogs = state.currentMoveLogs && state.currentMoveLogs.length > 0;
@@ -95,6 +111,8 @@ export const useGameStore = create((set, get) => ({
       isClimbing: false,
       isPreviewMode: false,
       previewTarget: null,
+      nextRoomStatus: 'SAFE',
+      anomalyType: null,
       systemLogs: [`ROOM ${String(nextFloor).padStart(4, '0')} ENTERED.`, ...state.systemLogs].slice(0, 5)
     };
   }),

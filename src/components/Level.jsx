@@ -1,47 +1,157 @@
 import { RigidBody, CuboidCollider } from '@react-three/rapier';
 import { Grid } from '@react-three/drei';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '../stores/useGameStore';
 import * as THREE from 'three';
+
+// --- プレビュー用: 亡霊コンポーネント ---
+const PreviewPhantom = ({ type }) => {
+    const meshRef = useRef();
+    const cameraTarget = useGameStore(state => state.previewTarget);
+
+    useFrame(({ clock }) => {
+        if (!meshRef.current) return;
+        const t = clock.elapsedTime;
+
+        if (type === 'GHOST_FAST') {
+            // 異常: 高速移動
+            const speed = 15;
+            meshRef.current.position.x = Math.sin(t * speed) * 4;
+            meshRef.current.position.z = Math.cos(t * speed) * 4;
+            meshRef.current.position.y = 0.9 + Math.sin(t * 20) * 0.2;
+            meshRef.current.rotation.y = -t * speed;
+        }
+        else if (type === 'GHOST_STARE') {
+            // 異常: 凝視
+            meshRef.current.position.set(0, 0.9, 0);
+
+            let lookAtPos = new THREE.Vector3(0, 0.9, 0);
+            const dist = 10;
+            if (cameraTarget === 'front') lookAtPos.z += dist;
+            else if (cameraTarget === 'back') lookAtPos.z -= dist;
+            else if (cameraTarget === 'left') lookAtPos.x -= dist;
+            else if (cameraTarget === 'right') lookAtPos.x += dist;
+            else if (cameraTarget === 'up') lookAtPos.y -= dist;
+            else if (cameraTarget === 'down') lookAtPos.y += dist;
+
+            meshRef.current.lookAt(lookAtPos);
+        }
+        else {
+            // 正常: ゆったり移動
+            meshRef.current.position.x = Math.sin(t * 0.8) * 2;
+            meshRef.current.position.z = Math.cos(t * 0.8) * 2;
+            meshRef.current.position.y = 0.9 + Math.sin(t * 2) * 0.15;
+
+            const targetX = Math.sin((t + 0.1) * 0.8) * 2;
+            const targetZ = Math.cos((t + 0.1) * 0.8) * 2;
+            meshRef.current.lookAt(targetX, 0.9, targetZ);
+        }
+    });
+
+    return (
+        <mesh ref={meshRef} position={[0, 0.9, 0]}>
+            <boxGeometry args={[0.75, 1.8, 0.75]} />
+            <meshBasicMaterial
+                color="#222222"
+                transparent
+                opacity={0.85}
+            />
+        </mesh>
+    );
+};
+
+// --- プレビュー用: 目のコンポーネント ---
+const PreviewEyes = ({ isAnomaly }) => {
+    const count = isAnomaly ? 80 : 0;
+
+    const eyes = useMemo(() => {
+        return new Array(count).fill(0).map((_, i) => {
+            const side = Math.floor(Math.random() * 4);
+            const pos = new THREE.Vector3();
+            const rot = new THREE.Euler();
+            const offset = 4.8;
+
+            if (side === 0) { pos.set(Math.random() * 8 - 4, Math.random() * 8 + 1, -offset); rot.y = 0; }
+            else if (side === 1) { pos.set(Math.random() * 8 - 4, Math.random() * 8 + 1, offset); rot.y = Math.PI; }
+            else if (side === 2) { pos.set(-offset, Math.random() * 8 + 1, Math.random() * 8 - 4); rot.y = Math.PI / 2; }
+            else { pos.set(offset, Math.random() * 8 + 1, Math.random() * 8 - 4); rot.y = -Math.PI / 2; }
+
+            return { pos, rot, scale: 0.8 + Math.random() * 0.5 };
+        });
+    }, [count, isAnomaly]);
+
+    if (count === 0) return null;
+
+    return (
+        <group>
+            {eyes.map((eye, i) => (
+                <group key={i} position={eye.pos} rotation={eye.rot} scale={eye.scale}>
+                    <mesh position={[0, 0, 0]}>
+                        <sphereGeometry args={[0.15, 16, 16]} />
+                        <meshBasicMaterial color="white" />
+                    </mesh>
+                    <mesh position={[0, 0, 0.12]}>
+                        <sphereGeometry args={[0.08, 16, 16]} />
+                        <meshBasicMaterial color="black" />
+                    </mesh>
+                </group>
+            ))}
+        </group>
+    );
+};
 
 // --- プレビュー用の部屋コンポーネント ---
 const PreviewRoom = () => {
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
     const nextRoomStatus = useGameStore(state => state.nextRoomStatus);
+    const anomalyType = useGameStore(state => state.anomalyType);
 
-    // プレビュー部屋の位置 (Y=-1000)
     const position = [0, -1000, 0];
     const size = 10;
+    const nextThemeColor = "#ffffff";
 
-    const nextThemeColor = useMemo(() => {
-        if (nextRoomStatus === 'ANOMALY') return "#ff0000";
-        return "#00ff00";
-    }, [nextRoomStatus]);
+    const showPhantom = useMemo(() => {
+        if (nextRoomStatus === 'SAFE') return Math.random() < 0.5;
+        // 【修正】nullチェックを追加
+        return anomalyType && anomalyType.startsWith('GHOST');
+    }, [nextRoomStatus, anomalyType]);
+
+    // 【修正】nullチェックを追加 (または初期値 'NORMAL' を設定)
+    const phantomType = nextRoomStatus === 'SAFE' ? 'NORMAL' : (anomalyType || 'NORMAL');
+    const showEyes = anomalyType === 'EYES_CLUSTER';
 
     if (!isPreviewMode) return null;
 
     return (
         <group position={position}>
-            {/* 床 */}
             <mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-            {/* 天井 */}
+
             <mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, size, 0]} rotation={[Math.PI, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-            {/* 壁 */}
+
             <mesh position={[0, size / 2, -size / 2 - 0.5]}><boxGeometry args={[size, size, 1]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
+
             <mesh position={[0, size / 2, size / 2 + 0.5]}><boxGeometry args={[size, size, 1]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
+
             <mesh position={[-size / 2 - 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
+
             <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
+
+            {showPhantom && <PreviewPhantom type={phantomType} />}
+            <PreviewEyes isAnomaly={showEyes} />
+
         </group>
     );
 };
 
-// グリッド描画用
+// ... 以下、GridPlane, Ladder, Hatch, Levelコンポーネントは省略 (変更なし) ...
+// (実際の更新時はLevel.jsx全体を反映させてください)
 const GridPlane = ({ position, rotation, color = "#ffffff" }) => (
     <Grid
         position={position}
@@ -59,7 +169,6 @@ const GridPlane = ({ position, rotation, color = "#ffffff" }) => (
     />
 );
 
-// はしご
 const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
     const setIsClimbing = useGameStore(state => state.setIsClimbing);
     const rungs = useMemo(() => {
@@ -96,7 +205,6 @@ const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
     );
 };
 
-// ハッチ
 const Hatch = ({ position, rotation, direction }) => {
     const enterPreviewMode = useGameStore((state) => state.enterPreviewMode);
     const isPreviewMode = useGameStore((state) => state.isPreviewMode);
@@ -146,26 +254,19 @@ const Hatch = ({ position, rotation, direction }) => {
 export default function Level() {
     const size = 10;
     const themeColor = useGameStore(state => state.themeColor);
-    // 【追加】プレビュー操作のためのフック
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
     const confirmMovement = useGameStore(state => state.confirmMovement);
     const exitPreviewMode = useGameStore(state => state.exitPreviewMode);
 
-    // 【追加】プレビュー中のキー入力監視
     useEffect(() => {
         if (!isPreviewMode) return;
-
         const handlePreviewKeys = (e) => {
-            // Space または Enter で侵入
             if (e.code === 'Space' || e.key === 'Enter') {
                 confirmMovement();
-            }
-            // X, Esc, Backspace でキャンセル
-            else if (e.code === 'KeyX' || e.key === 'Escape' || e.key === 'Backspace') {
+            } else if (e.code === 'KeyX' || e.key === 'Escape' || e.key === 'Backspace') {
                 exitPreviewMode();
             }
         };
-
         window.addEventListener('keydown', handlePreviewKeys);
         return () => window.removeEventListener('keydown', handlePreviewKeys);
     }, [isPreviewMode, confirmMovement, exitPreviewMode]);
