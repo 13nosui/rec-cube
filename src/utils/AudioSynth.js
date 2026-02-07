@@ -1,3 +1,4 @@
+// シングルトンでコンテキストを保持
 let audioCtx = null;
 
 const getAudioContext = () => {
@@ -53,5 +54,44 @@ export const playBuzz = () => {
 
         osc.start();
         osc.stop(ctx.currentTime + 0.5);
+    } catch (e) { console.warn(e); }
+};
+
+// 【追加】足音の再生
+export const playStep = () => {
+    try {
+        const ctx = getAudioContext();
+        if (!ctx) return;
+        if (ctx.state === 'suspended') ctx.resume().catch(() => { });
+
+        // 1. ノイズの生成 (床を叩く音の元)
+        const bufferSize = ctx.sampleRate * 0.1; // 0.1秒分
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+            data[i] = Math.random() * 2 - 1;
+        }
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        // 2. フィルタ (音をこもらせて「コツッ」という感じにする)
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(600, ctx.currentTime);
+
+        // 3. エンベロープ (音量変化)
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.15, ctx.currentTime); // 音量はここで調整
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+
+        // 4. ピッチのランダム化 (自然なバリエーション)
+        noise.playbackRate.value = 0.8 + Math.random() * 0.4;
+
+        // 接続
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        noise.start();
     } catch (e) { console.warn(e); }
 };
