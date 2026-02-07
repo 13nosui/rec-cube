@@ -8,6 +8,7 @@ import UI from './components/UI';
 import Traces from './components/Traces';
 import Eyes from './components/Eyes';
 import Phantom from './components/Phantom';
+import LogProjection from './components/LogProjection';
 
 export default function App() {
   const keyboardMap = [
@@ -34,6 +35,7 @@ export default function App() {
             <Traces />
             <Eyes />
             <Phantom />
+            <LogProjection />
           </Physics>
           <ambientLight intensity={0.5} />
         </Suspense>
