@@ -23,7 +23,6 @@ const GridPlane = ({ position, rotation }) => (
 
 // ハッチのコンポーネント
 const Hatch = ({ position, rotation }) => {
-    // 【修正】無限ループ防止のため、データを個別に取得する
     const nextRoom = useGameStore((state) => state.nextRoom);
     const addSystemLog = useGameStore((state) => state.addSystemLog);
 
@@ -44,12 +43,33 @@ const Hatch = ({ position, rotation }) => {
 
     return (
         <group position={position} rotation={rotation}>
-            {/* ビジュアル */}
+            {/* ベース：黒い板 */}
             <mesh position={[0, 0, 0.05]}>
                 <planeGeometry args={[2, 2]} />
                 <meshBasicMaterial color="#000000" />
             </mesh>
+
+            {/* グリッド（赤） */}
             <Grid args={[2, 2]} cellSize={0.5} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="red" sectionColor="red" />
+
+            {/* 【追加】十字の取手（白） */}
+            <group position={[0, 0, 0.15]}>
+                {/* 縦の棒 */}
+                <mesh>
+                    <boxGeometry args={[0.1, 0.8, 0.1]} />
+                    <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
+                </mesh>
+                {/* 横の棒 */}
+                <mesh>
+                    <boxGeometry args={[0.8, 0.1, 0.1]} />
+                    <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
+                </mesh>
+                {/* 中心軸 */}
+                <mesh position={[0, 0, -0.05]}>
+                    <cylinderGeometry args={[0.15, 0.15, 0.1, 16]} />
+                    <meshStandardMaterial color="#333" />
+                </mesh>
+            </group>
 
             {/* センサー */}
             <CuboidCollider
@@ -59,7 +79,6 @@ const Hatch = ({ position, rotation }) => {
                 onIntersectionEnter={(payload) => {
                     if (payload.other.rigidBodyObject?.name === "player") {
                         setIsNear(true);
-                        // ログ機能がまだロードされていない場合のエラー回避
                         if (addSystemLog) addSystemLog("PRESS 'E' TO OPEN");
                     }
                 }}
@@ -75,12 +94,11 @@ const Hatch = ({ position, rotation }) => {
 
 export default function Level() {
     const size = 10;
-    // ストア読み込み（安全策）
     const availableHatches = useGameStore((state) => state.availableHatches) ?? 4;
 
     return (
         <group>
-            {/* 床・天井・壁の定義（変更なし） */}
+            {/* 床・天井・壁の定義 */}
             <RigidBody type="fixed" colliders="cuboid">
                 <mesh position={[0, -0.5, 0]}>
                     <boxGeometry args={[size, 1, size]} />
