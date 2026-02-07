@@ -4,12 +4,13 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls, useKeyboardControls } from '@react-three/drei';
 import { RigidBody, CapsuleCollider } from '@react-three/rapier';
 import { useGameStore } from '../stores/useGameStore';
-import { playStep } from '../utils/AudioSynth'; // 【追加】インポート
+import { playStep } from '../utils/AudioSynth';
 
 const MOVE_SPEED = 5;
+const CLIMB_SPEED = 3;
 const LOG_INTERVAL = 0.2;
 const GAZE_INTERVAL = 0.5;
-const STEP_INTERVAL = 0.5; // 【追加】足音の間隔
+const STEP_INTERVAL = 0.5;
 
 export default function Player() {
     const rb = useRef();
@@ -17,16 +18,17 @@ export default function Player() {
     const [, getKeys] = useKeyboardControls();
     const [isLocked, setIsLocked] = useState(false);
 
-    // Storeからアクションを個別に取得
+    // Store
     const addLog = useGameStore(state => state.addLog);
     const addGazeLog = useGameStore(state => state.addGazeLog);
     const addSystemLog = useGameStore(state => state.addSystemLog);
     const floor = useGameStore(state => state.floor);
     const roomStartTime = useGameStore(state => state.roomStartTime);
+    const isClimbing = useGameStore(state => state.isClimbing);
 
     const lastLogTime = useRef(0);
     const lastGazeTime = useRef(0);
-    const lastStepTime = useRef(0); // 【追加】前回の足音の時間
+    const lastStepTime = useRef(0);
     const lastFloor = useRef(floor);
     const lastHitPoint = useRef(new THREE.Vector3(0, 0, 0));
     const stareCount = useRef(0);
@@ -36,7 +38,8 @@ export default function Player() {
 
         // --- 部屋移動時のリセット ---
         if (floor !== lastFloor.current) {
-            rb.current.setTranslation({ x: 0, y: 2, z: 0 }, true);
+            // 【修正】中央(0,0)ではなく、少し手前(0,2,2)に移動させて、いきなりはしごを掴まないようにする
+            rb.current.setTranslation({ x: 0, y: 2, z: 2 }, true);
             rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
             lastFloor.current = floor;
             stareCount.current = 0;
@@ -45,43 +48,79 @@ export default function Player() {
 
         // --- 移動処理 ---
         const { forward, backward, left, right } = getKeys();
-        const velocity = new THREE.Vector3();
-        if (forward) velocity.z -= 1;
-        if (backward) velocity.z += 1;
-        if (left) velocity.x -= 1;
-        if (right) velocity.x += 1;
 
-        if (velocity.length() > 0) {
-            velocity.normalize().multiplyScalar(MOVE_SPEED).applyQuaternion(camera.quaternion);
-        }
+        if (isClimbing) {
+            // --- はしごモード ---
+            // 【追加】重力を無効化して、勝手に落ちないようにする
+            rb.current.setGravityScale(0, true);
 
-        // 落下速度は維持
-        const currentVel = rb.current.linvel();
-        velocity.y = currentVel.y;
-        rb.current.setLinvel(velocity, true);
+            const climbVelocity = new THREE.Vector3();
 
-        const pos = rb.current.translation();
-        camera.position.set(pos.x, pos.y + 0.7, pos.z);
+            // 上下移動 (W/S)
+            if (forward) climbVelocity.y += 1;
+            if (backward) climbVelocity.y -= 1;
 
-        // --- 【追加】足音再生 ---
-        // 水平方向の移動速度を計算
-        const horizontalSpeed = Math.sqrt(velocity.x ** 2 + velocity.z ** 2);
+            // 左右移動 (A/D)
+            const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            cameraRight.y = 0;
+            cameraRight.normalize();
 
-        // 地面にいるか簡易判定 (Y速度が小さい = 接地しているとみなす)
-        const isGrounded = Math.abs(currentVel.y) < 0.5;
+            if (left) climbVelocity.add(cameraRight.clone().multiplyScalar(-1));
+            if (right) climbVelocity.add(cameraRight);
 
-        // 移動していて、かつ一定時間が経過していれば再生
-        if (horizontalSpeed > 1 && isGrounded) {
-            if (state.clock.elapsedTime - lastStepTime.current > STEP_INTERVAL) {
-                playStep();
-                lastStepTime.current = state.clock.elapsedTime;
+            climbVelocity.normalize().multiplyScalar(CLIMB_SPEED);
+
+            // 速度適用
+            rb.current.setLinvel({
+                x: climbVelocity.x,
+                y: climbVelocity.y,
+                z: climbVelocity.z
+            }, true);
+
+            // 位置同期
+            const pos = rb.current.translation();
+            camera.position.set(pos.x, pos.y + 0.7, pos.z);
+
+        } else {
+            // --- 通常歩行モード ---
+            // 【追加】重力を通常に戻す
+            rb.current.setGravityScale(1, true);
+
+            const velocity = new THREE.Vector3();
+            if (forward) velocity.z -= 1;
+            if (backward) velocity.z += 1;
+            if (left) velocity.x -= 1;
+            if (right) velocity.x += 1;
+
+            if (velocity.length() > 0) {
+                velocity.normalize().multiplyScalar(MOVE_SPEED).applyQuaternion(camera.quaternion);
+            }
+
+            const currentVel = rb.current.linvel();
+            velocity.y = currentVel.y; // 落下速度は維持
+            rb.current.setLinvel(velocity, true);
+
+            const pos = rb.current.translation();
+            camera.position.set(pos.x, pos.y + 0.7, pos.z);
+
+            // 足音再生
+            const horizontalSpeed = Math.sqrt(velocity.x ** 2 + velocity.z ** 2);
+            const isGrounded = Math.abs(currentVel.y) < 0.5;
+            if (horizontalSpeed > 1 && isGrounded) {
+                if (state.clock.elapsedTime - lastStepTime.current > STEP_INTERVAL) {
+                    playStep();
+                    lastStepTime.current = state.clock.elapsedTime;
+                }
             }
         }
 
-        // --- ログ記録 (移動) ---
+        const pos = rb.current.translation();
+
+        // --- ログ記録 ---
         lastLogTime.current += delta;
         if (lastLogTime.current >= LOG_INTERVAL) {
-            if (velocity.x !== 0 || velocity.z !== 0) {
+            const vel = rb.current.linvel();
+            if (Math.abs(vel.x) > 0.1 || Math.abs(vel.y) > 0.1 || Math.abs(vel.z) > 0.1) {
                 addLog({
                     pos: [pos.x, pos.y, pos.z],
                     time: Date.now() - roomStartTime
@@ -90,7 +129,7 @@ export default function Player() {
             lastLogTime.current = 0;
         }
 
-        // --- 視線検知 (Gaze) ---
+        // --- 視線検知 ---
         lastGazeTime.current += delta;
         if (lastGazeTime.current >= GAZE_INTERVAL) {
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
@@ -115,8 +154,6 @@ export default function Player() {
                         stareCount.current = 0;
                     }
                 }
-            } else {
-                stareCount.current = 0;
             }
             lastGazeTime.current = 0;
         }
@@ -129,7 +166,8 @@ export default function Player() {
                 ref={rb}
                 name="player"
                 colliders={false}
-                position={[0, 2, 0]}
+                // 【修正】初期位置も少し手前(z=2)に変更
+                position={[0, 2, 2]}
                 enabledRotations={[false, false, false]}
                 type="dynamic"
             >
