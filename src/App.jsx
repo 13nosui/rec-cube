@@ -10,7 +10,7 @@ import UI from './components/UI';
 import Traces from './components/Traces';
 import Phantom from './components/Phantom';
 import LogProjection from './components/LogProjection';
-import Eyes from './components/Eyes'; // ← 復活！
+import Eyes from './components/Eyes';
 
 export default function App() {
   const keyboardMap = [
@@ -19,6 +19,7 @@ export default function App() {
     { name: 'left', keys: ['ArrowLeft', 'a', 'A'] },
     { name: 'right', keys: ['ArrowRight', 'd', 'D'] },
     { name: 'jump', keys: ['Space'] },
+    { name: 'interact', keys: ['KeyE', 'e', 'E'] }, // ← 追加: Eキー
   ];
 
   return (
@@ -36,10 +37,10 @@ export default function App() {
             <Level />
 
             {/* --- 恐怖の記録たち --- */}
-            <Traces />         {/* 足跡 */}
-            <Phantom />        {/* 亡霊 */}
-            <LogProjection />  {/* 文字 */}
-            <Eyes />           {/* 目 (復活！) */}
+            <Traces />
+            <Phantom />
+            <LogProjection />
+            <Eyes />
 
           </Physics>
           <ambientLight intensity={0.5} />
