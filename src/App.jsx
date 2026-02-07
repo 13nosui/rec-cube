@@ -7,6 +7,7 @@ import Level from './components/Level';
 import UI from './components/UI';
 import Traces from './components/Traces';
 import Eyes from './components/Eyes';
+import Phantom from './components/Phantom';
 
 export default function App() {
   const keyboardMap = [
@@ -32,6 +33,7 @@ export default function App() {
             <Level />
             <Traces />
             <Eyes />
+            <Phantom />
           </Physics>
           <ambientLight intensity={0.5} />
         </Suspense>

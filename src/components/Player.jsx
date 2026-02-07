@@ -62,7 +62,10 @@ export default function Player() {
         lastLogTime.current += delta;
         if (lastLogTime.current >= LOG_INTERVAL) {
             if (velocity.x !== 0 || velocity.z !== 0) {
-                addLog([pos.x, pos.y, pos.z]);
+                addLog({
+                    pos: [pos.x, pos.y, pos.z],
+                    time: Date.now() - useGameStore.getState().roomStartTime
+                });
             }
             lastLogTime.current = 0;
         }

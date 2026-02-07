@@ -13,8 +13,8 @@ export const useGameStore = create((set, get) => ({
   availableHatches: 4,
   systemLogs: [],
 
-  addLog: (position) => set((state) => ({
-    moveLogs: [...state.moveLogs, position]
+  addLog: (logEntry) => set((state) => ({
+    moveLogs: [...state.moveLogs, logEntry]
   })),
 
   // 視線ログ記録 + システムログ連動

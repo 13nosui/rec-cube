@@ -12,7 +12,8 @@ export default function Traces() {
 
         const tempObject = new THREE.Object3D();
 
-        previousMoveLogs.forEach((pos, index) => {
+        previousMoveLogs.forEach((log, index) => {
+            const pos = log.pos;
             // position: [x, y, z]
             // 床より少しだけ浮かせる (y + 0.02)
             tempObject.position.set(pos[0], 0.02, pos[2]);
