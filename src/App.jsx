@@ -2,13 +2,14 @@ import { Canvas } from '@react-three/fiber';
 import { Physics } from '@react-three/rapier';
 import { KeyboardControls } from '@react-three/drei';
 import { Suspense } from 'react';
+
+// コンポーネントのインポート確認
 import Player from './components/Player';
 import Level from './components/Level';
 import UI from './components/UI';
 import Traces from './components/Traces';
-import Eyes from './components/Eyes';
-import Phantom from './components/Phantom';
-import LogProjection from './components/LogProjection';
+import Phantom from './components/Phantom';        // ← これが必要です
+import LogProjection from './components/LogProjection'; // ← これが必要です
 
 export default function App() {
   const keyboardMap = [
@@ -33,7 +34,6 @@ export default function App() {
             <Player />
             <Level />
             <Traces />
-            <Eyes />
             <Phantom />
             <LogProjection />
           </Physics>

@@ -6,29 +6,31 @@ export default function Traces() {
     const previousMoveLogs = useGameStore((state) => state.previousMoveLogs);
     const meshRef = useRef();
 
-    // ログデータが変わったら、インスタンス（分身）の位置を更新する
     useLayoutEffect(() => {
-        if (!meshRef.current || previousMoveLogs.length === 0) return;
+        if (!meshRef.current || !previousMoveLogs || previousMoveLogs.length === 0) return;
 
         const tempObject = new THREE.Object3D();
 
         previousMoveLogs.forEach((log, index) => {
-            const pos = log.pos;
-            // position: [x, y, z]
-            // 床より少しだけ浮かせる (y + 0.02)
-            tempObject.position.set(pos[0], 0.02, pos[2]);
+            // 配列かオブジェクトかを判別して座標を取り出す
+            let position = null;
+            if (Array.isArray(log)) {
+                position = log;
+            } else if (log && log.pos) {
+                position = log.pos;
+            }
 
-            // 床に寝かせる
-            tempObject.rotation.x = -Math.PI / 2;
-
-            tempObject.updateMatrix();
-            meshRef.current.setMatrixAt(index, tempObject.matrix);
+            if (position && position.length === 3) {
+                tempObject.position.set(position[0], 0.02, position[2]);
+                tempObject.rotation.x = -Math.PI / 2;
+                tempObject.updateMatrix();
+                meshRef.current.setMatrixAt(index, tempObject.matrix);
+            }
         });
 
         meshRef.current.instanceMatrix.needsUpdate = true;
     }, [previousMoveLogs]);
 
-    // データがない時は何も描画しない
     if (!previousMoveLogs || previousMoveLogs.length === 0) return null;
 
     return (

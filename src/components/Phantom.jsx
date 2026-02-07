@@ -1,73 +1,84 @@
-import * as THREE from 'three';
-import { useRef } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '../stores/useGameStore';
+import * as THREE from 'three';
 
 export default function Phantom() {
+    const previousMoveLogs = useGameStore(state => state.previousMoveLogs);
+    const roomStartTime = useGameStore(state => state.roomStartTime);
     const meshRef = useRef();
-    const previousMoveLogs = useGameStore((state) => state.previousMoveLogs);
-    const roomStartTime = useGameStore((state) => state.roomStartTime);
+
+    // 身長（高さ）を定義
+    const PHANTOM_HEIGHT = 1.8;
+
+    const material = useMemo(() => new THREE.MeshBasicMaterial({
+        color: '#00ffff',
+        wireframe: true,
+        transparent: true,
+        opacity: 0.6
+    }), []);
+
+    const geometry = useMemo(() => new THREE.BoxGeometry(0.75, PHANTOM_HEIGHT, 0.75), []);
+
+    useEffect(() => {
+        console.log("Phantom Data:", previousMoveLogs?.length);
+    }, [previousMoveLogs]);
 
     useFrame(() => {
-        if (!meshRef.current || previousMoveLogs.length === 0) return;
+        if (!meshRef.current) return;
 
-        const playbackTime = Date.now() - roomStartTime;
-
-        // Find the bracket
-        let nextIndex = previousMoveLogs.findIndex(log => log.time > playbackTime);
-
-        if (nextIndex === -1) {
-            // Reached the end
-            const lastLog = previousMoveLogs[previousMoveLogs.length - 1];
-            meshRef.current.position.set(...lastLog.pos);
-            meshRef.current.visible = false; // Hide when finished
+        if (!previousMoveLogs || previousMoveLogs.length < 2) {
+            meshRef.current.visible = false;
             return;
         }
 
-        meshRef.current.visible = true;
+        if (Array.isArray(previousMoveLogs[0])) {
+            meshRef.current.visible = false;
+            return;
+        }
 
-        if (nextIndex === 0) {
-            meshRef.current.position.set(...previousMoveLogs[0].pos);
+        const playbackTime = Date.now() - roomStartTime;
+        const lastLog = previousMoveLogs[previousMoveLogs.length - 1];
+
+        if (playbackTime > lastLog.time) {
+            meshRef.current.visible = false;
+            return;
+        }
+
+        let nextIndex = previousMoveLogs.findIndex(log => log.time > playbackTime);
+
+        if (nextIndex <= 0) {
+            const startPos = previousMoveLogs[0].pos;
+            if (startPos) {
+                // 【修正】初期位置：足元(y=0)に接地させるため、中心を height/2 に設定
+                meshRef.current.position.set(startPos[0], PHANTOM_HEIGHT / 2, startPos[2]);
+                meshRef.current.visible = true;
+            }
             return;
         }
 
         const prevLog = previousMoveLogs[nextIndex - 1];
         const nextLog = previousMoveLogs[nextIndex];
 
-        // Interpolate
-        const alpha = (playbackTime - prevLog.time) / (nextLog.time - prevLog.time);
+        if (prevLog && nextLog && prevLog.pos && nextLog.pos) {
+            const duration = nextLog.time - prevLog.time;
+            const elapsed = playbackTime - prevLog.time;
+            const alpha = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
 
-        const lerpPos = [
-            THREE.MathUtils.lerp(prevLog.pos[0], nextLog.pos[0], alpha),
-            THREE.MathUtils.lerp(prevLog.pos[1], nextLog.pos[1], alpha),
-            THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha)
-        ];
+            // X, Z 座標は補間する
+            const x = THREE.MathUtils.lerp(prevLog.pos[0], nextLog.pos[0], alpha);
+            const z = THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha);
 
-        meshRef.current.position.set(...lerpPos);
+            // 【修正】Y座標はログを使わず、「足元が接地する高さ」に固定する
+            // Boxの中心が原点なので、足元を y=0 に合わせるには、中心を height/2 に持ち上げる
+            const y = PHANTOM_HEIGHT / 2;
+
+            meshRef.current.position.set(x, y, z);
+            meshRef.current.visible = true;
+        }
     });
 
-    if (previousMoveLogs.length === 0) return null;
-
     return (
-        <group>
-            {/* The Body */}
-            <mesh ref={meshRef}>
-                <boxGeometry args={[0.75, 1.8, 0.75]} />
-                <meshPhysicalMaterial
-                    transparent
-                    opacity={0.3}
-                    transmission={0.8}
-                    thickness={0.5}
-                    roughness={0}
-                    color="#a0f0ff"
-                    wireframe={false}
-                />
-            </mesh>
-            {/* Wireframe Overlay for extra "tech" look */}
-            <mesh position={meshRef.current?.position} visible={meshRef.current?.visible}>
-                <boxGeometry args={[0.76, 1.81, 0.76]} />
-                <meshBasicMaterial wireframe color="#00ffff" transparent opacity={0.2} />
-            </mesh>
-        </group>
+        <mesh ref={meshRef} geometry={geometry} material={material} />
     );
 }

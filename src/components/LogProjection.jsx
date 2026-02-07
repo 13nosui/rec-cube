@@ -1,70 +1,53 @@
-import { useMemo } from 'react';
 import { Text } from '@react-three/drei';
-import * as THREE from 'three';
 import { useGameStore } from '../stores/useGameStore';
+import { useMemo } from 'react';
+import * as THREE from 'three';
 
-const OMINOUS_STRINGS = [
-    "OBSERVED",
-    "HESITATION",
-    "RECORDED",
-    "ERROR: SUBJECT",
-    "NO ESCAPE",
+const MESSAGES = [
+    "OBSERVED", "HESITATION", "RECORDED", "ERROR: SUBJECT",
+    "NO ESCAPE", "WATCHING", "DATA: CORRUPT", "WHERE ARE YOU?"
 ];
 
-const center = new THREE.Vector3(0, 1.7, 0);
-
 export default function LogProjection() {
-    const previousGazeLogs = useGameStore((state) => state.previousGazeLogs);
-    const floor = useGameStore((state) => state.floor);
+    const previousGazeLogs = useGameStore(state => state.previousGazeLogs);
+    const floor = useGameStore(state => state.floor);
 
-    const projectedLogs = useMemo(() => {
+    const projections = useMemo(() => {
         if (!previousGazeLogs || previousGazeLogs.length === 0) return [];
 
-        return previousGazeLogs.map((pos, index) => {
-            const position = new THREE.Vector3(...pos);
+        // 重くなりすぎないように間引く
+        const logs = previousGazeLogs.length > 20
+            ? previousGazeLogs.filter((_, i) => i % Math.ceil(previousGazeLogs.length / 20) === 0)
+            : previousGazeLogs;
 
-            // Offset slightly towards center to avoid z-fighting
-            const offsetPosition = position.clone().multiplyScalar(0.99);
+        return logs.map((point, i) => {
+            const msg = Math.random() > 0.5
+                ? MESSAGES[Math.floor(Math.random() * MESSAGES.length)]
+                : `[${point[0].toFixed(1)}, ${point[1].toFixed(1)}]`;
 
-            // Increase size with floor
-            const size = 0.3 + floor * 0.05;
+            const size = 0.2 + (floor * 0.05);
+            const pos = new THREE.Vector3(point[0], point[1], point[2]);
+            const lookAt = new THREE.Vector3(0, 1.7, 0);
+            pos.lerp(lookAt, 0.05);
 
-            // Random ominous text or coordinate
-            let text = OMINOUS_STRINGS[Math.floor(Math.random() * OMINOUS_STRINGS.length)];
-            if (Math.random() > 0.7) {
-                text = `[X:${pos[0].toFixed(1)}]`;
-            }
-
-            return {
-                id: index,
-                position: offsetPosition,
-                text,
-                size,
-                color: Math.random() > 0.8 ? "red" : "white"
-            };
+            return { pos, msg, size, lookAt, key: i };
         });
     }, [previousGazeLogs, floor]);
 
-    if (projectedLogs.length === 0) return null;
-
     return (
         <group>
-            {projectedLogs.map((log) => (
+            {projections.map(({ pos, msg, size, lookAt, key }) => (
                 <Text
-                    key={log.id}
-                    position={log.position}
-                    fontSize={log.size}
-                    color={log.color}
-                    font="monospace"
+                    key={key}
+                    position={pos}
+                    fontSize={size}
+                    color={Math.random() > 0.8 ? "red" : "white"}
+                    // fontプロパティを削除（デフォルトフォントを使用）
                     anchorX="center"
                     anchorY="middle"
-                    opacity={0.8}
-                    transparent
-                    onSync={(mesh) => {
-                        mesh.lookAt(center);
-                    }}
+                    onSync={(mesh) => mesh.lookAt(lookAt)}
                 >
-                    {log.text}
+                    {msg}
                 </Text>
             ))}
         </group>
