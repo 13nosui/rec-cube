@@ -1,28 +1,22 @@
 import { create } from 'zustand';
-// Radix UI Colorsのインポート (Level.jsxから移動)
 import {
   cyan, crimson, lime, purple, amber,
   mint, indigo, sky, tomato, teal, violet, orange
 } from '@radix-ui/colors';
 
-// カラーパレットの定義
 const COLOR_SEQUENCE = [
   cyan, crimson, lime, purple, amber,
   mint, indigo, sky, tomato, teal, violet, orange
 ];
 
-// ヘルパー: フロア数からテーマカラー(Hex文字列)を取得
 const getThemeColor = (floor) => {
   const colorObj = COLOR_SEQUENCE[(floor - 1) % COLOR_SEQUENCE.length];
-  // Step 10 (index 9) の色を取得
   return Object.values(colorObj)[9];
 };
 
-export const useGameStore = create((set) => ({
+export const useGameStore = create((set, get) => ({
   floor: 1,
-  // 【追加】初期カラーの設定
   themeColor: getThemeColor(1),
-
   availableHatches: 6,
   systemLogs: ["SYSTEM INITIALIZED...", "RECORDING STARTED..."],
 
@@ -35,6 +29,55 @@ export const useGameStore = create((set) => ({
   isClimbing: false,
   setIsClimbing: (isClimbing) => set({ isClimbing }),
 
+  // --- プレビュー機能 ---
+  isPreviewMode: false,
+  previewTarget: null,
+  nextRoomStatus: 'SAFE',
+
+  enterPreviewMode: (target) => {
+    // 30%の確率で異常発生
+    const isAnomaly = Math.random() < 0.3;
+    set({
+      isPreviewMode: true,
+      previewTarget: target,
+      nextRoomStatus: isAnomaly ? 'ANOMALY' : 'SAFE'
+    });
+  },
+
+  exitPreviewMode: () => {
+    set({ isPreviewMode: false, previewTarget: null });
+    get().addSystemLog("CONNECTION TERMINATED.");
+  },
+
+  // 【追加】部屋への侵入を確定するアクション
+  confirmMovement: () => {
+    const { nextRoomStatus, nextRoom, addSystemLog } = get();
+
+    if (nextRoomStatus === 'ANOMALY') {
+      // ゲームオーバー処理
+      // ログを出して初期階層(Floor 1)に戻す
+      addSystemLog("CRITICAL ERROR: FATAL ANOMALY");
+      addSystemLog("SYSTEM REBOOTING...");
+
+      set({
+        floor: 1,
+        themeColor: getThemeColor(1),
+        systemLogs: ["GAME OVER", "REBOOTING...", "RECORDING STARTED..."],
+        isPreviewMode: false,
+        previewTarget: null,
+        nextRoomStatus: 'SAFE',
+        currentMoveLogs: [],
+        previousMoveLogs: [],
+        roomStartTime: Date.now()
+      });
+    } else {
+      // 安全なら次の部屋へ
+      addSystemLog("CONNECTION SECURE. MOVING...");
+      nextRoom();
+    }
+  },
+  // --------------------------------------
+
   nextRoom: () => set((state) => {
     const hasMoveLogs = state.currentMoveLogs && state.currentMoveLogs.length > 0;
     const hasGazeLogs = state.currentGazeLogs && state.currentGazeLogs.length > 0;
@@ -42,9 +85,7 @@ export const useGameStore = create((set) => ({
 
     return {
       floor: nextFloor,
-      // 【追加】次の部屋の色を計算して更新
       themeColor: getThemeColor(nextFloor),
-
       availableHatches: 6,
       previousMoveLogs: hasMoveLogs ? [...state.currentMoveLogs] : [],
       previousGazeLogs: hasGazeLogs ? [...state.currentGazeLogs] : [],
@@ -52,6 +93,8 @@ export const useGameStore = create((set) => ({
       currentGazeLogs: [],
       roomStartTime: Date.now(),
       isClimbing: false,
+      isPreviewMode: false,
+      previewTarget: null,
       systemLogs: [`ROOM ${String(nextFloor).padStart(4, '0')} ENTERED.`, ...state.systemLogs].slice(0, 5)
     };
   }),
