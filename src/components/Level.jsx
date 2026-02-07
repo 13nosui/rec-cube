@@ -5,99 +5,86 @@ import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '../stores/useGameStore';
 import * as THREE from 'three';
 
-// --- プレビュー用: 亡霊コンポーネント ---
-const PreviewPhantom = ({ type }) => {
+// --- プレビュー用: デコイ（身代わり）コンポーネント ---
+const PreviewPhantom = () => {
     const meshRef = useRef();
-    const cameraTarget = useGameStore(state => state.previewTarget);
+    const decoyLogs = useGameStore(state => state.decoyLogs);
+    const nextRoomStatus = useGameStore(state => state.nextRoomStatus);
 
-    useFrame(({ clock }) => {
-        if (!meshRef.current) return;
-        const t = clock.elapsedTime;
+    // デコイ再生用のローカル時間
+    const [playbackTime, setPlaybackTime] = useState(0);
+    // デコイが「死んだ」かどうか
+    const [isDead, setIsDead] = useState(false);
 
-        if (type === 'GHOST_FAST') {
-            // 異常: 高速移動
-            const speed = 15;
-            meshRef.current.position.x = Math.sin(t * speed) * 4;
-            meshRef.current.position.z = Math.cos(t * speed) * 4;
-            meshRef.current.position.y = 0.9 + Math.sin(t * 20) * 0.2;
-            meshRef.current.rotation.y = -t * speed;
+    // 異常な部屋の場合、デコイが死ぬタイミングをランダムに決定 (1秒〜録画時間の半分くらいで)
+    const deathTime = useMemo(() => {
+        if (nextRoomStatus !== 'ANOMALY') return Infinity;
+        if (!decoyLogs || decoyLogs.length === 0) return 0;
+
+        const maxTime = decoyLogs[decoyLogs.length - 1].time;
+        // 録画時間の 20% 〜 80% の間のどこかで死ぬ
+        return maxTime * (0.2 + Math.random() * 0.6);
+    }, [nextRoomStatus, decoyLogs]);
+
+    useFrame((state, delta) => {
+        if (!meshRef.current || !decoyLogs || decoyLogs.length < 2) return;
+        if (isDead) return; // 死んでたら動かない
+
+        // 時間を進める
+        let newTime = playbackTime + (delta * 1000); // ms変換
+
+        // 異常発生時刻を超えたら死亡
+        if (newTime > deathTime) {
+            setIsDead(true);
+            // 死亡演出: 潰れる & 赤くなる
+            meshRef.current.scale.y = 0.1;
+            meshRef.current.position.y = 0.1;
+            meshRef.current.material.color.set("#ff0000"); // 赤色
+            return;
         }
-        else if (type === 'GHOST_STARE') {
-            // 異常: 凝視
-            meshRef.current.position.set(0, 0.9, 0);
 
-            let lookAtPos = new THREE.Vector3(0, 0.9, 0);
-            const dist = 10;
-            if (cameraTarget === 'front') lookAtPos.z += dist;
-            else if (cameraTarget === 'back') lookAtPos.z -= dist;
-            else if (cameraTarget === 'left') lookAtPos.x -= dist;
-            else if (cameraTarget === 'right') lookAtPos.x += dist;
-            else if (cameraTarget === 'up') lookAtPos.y -= dist;
-            else if (cameraTarget === 'down') lookAtPos.y += dist;
-
-            meshRef.current.lookAt(lookAtPos);
+        // ループ再生
+        const lastLog = decoyLogs[decoyLogs.length - 1];
+        if (newTime > lastLog.time) {
+            newTime = 0; // 最初に戻る
         }
-        else {
-            // 正常: ゆったり移動
-            meshRef.current.position.x = Math.sin(t * 0.8) * 2;
-            meshRef.current.position.z = Math.cos(t * 0.8) * 2;
-            meshRef.current.position.y = 0.9 + Math.sin(t * 2) * 0.15;
+        setPlaybackTime(newTime);
 
-            const targetX = Math.sin((t + 0.1) * 0.8) * 2;
-            const targetZ = Math.cos((t + 0.1) * 0.8) * 2;
-            meshRef.current.lookAt(targetX, 0.9, targetZ);
-        }
+        // --- 位置の補間 ---
+        // 現在時刻の直後のログを探す
+        let nextIndex = decoyLogs.findIndex(log => log.time > newTime);
+        if (nextIndex === -1) nextIndex = decoyLogs.length - 1;
+        if (nextIndex === 0) nextIndex = 1;
+
+        const prevLog = decoyLogs[nextIndex - 1];
+        const nextLog = decoyLogs[nextIndex];
+
+        const timeDiff = nextLog.time - prevLog.time;
+        const alpha = timeDiff > 0 ? (newTime - prevLog.time) / timeDiff : 0;
+
+        const x = THREE.MathUtils.lerp(prevLog.pos[0], nextLog.pos[0], alpha);
+        const y = THREE.MathUtils.lerp(prevLog.pos[1], nextLog.pos[1], alpha);
+        const z = THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha);
+
+        // 位置更新
+        meshRef.current.position.set(x, y, z);
+
+        // 向き更新 (進行方向を向く)
+        meshRef.current.lookAt(nextLog.pos[0], y, nextLog.pos[2]);
     });
 
+    if (!decoyLogs || decoyLogs.length === 0) return null;
+
     return (
-        <mesh ref={meshRef} position={[0, 0.9, 0]}>
+        <mesh ref={meshRef}>
             <boxGeometry args={[0.75, 1.8, 0.75]} />
             <meshBasicMaterial
-                color="#222222"
+                color="#00ff00" // デコイはプレイヤーの味方なので緑色っぽく
+                wireframe={true}
                 transparent
-                opacity={0.85}
+                opacity={0.6}
             />
         </mesh>
-    );
-};
-
-// --- プレビュー用: 目のコンポーネント ---
-const PreviewEyes = ({ isAnomaly }) => {
-    const count = isAnomaly ? 80 : 0;
-
-    const eyes = useMemo(() => {
-        return new Array(count).fill(0).map((_, i) => {
-            const side = Math.floor(Math.random() * 4);
-            const pos = new THREE.Vector3();
-            const rot = new THREE.Euler();
-            const offset = 4.8;
-
-            if (side === 0) { pos.set(Math.random() * 8 - 4, Math.random() * 8 + 1, -offset); rot.y = 0; }
-            else if (side === 1) { pos.set(Math.random() * 8 - 4, Math.random() * 8 + 1, offset); rot.y = Math.PI; }
-            else if (side === 2) { pos.set(-offset, Math.random() * 8 + 1, Math.random() * 8 - 4); rot.y = Math.PI / 2; }
-            else { pos.set(offset, Math.random() * 8 + 1, Math.random() * 8 - 4); rot.y = -Math.PI / 2; }
-
-            return { pos, rot, scale: 0.8 + Math.random() * 0.5 };
-        });
-    }, [count, isAnomaly]);
-
-    if (count === 0) return null;
-
-    return (
-        <group>
-            {eyes.map((eye, i) => (
-                <group key={i} position={eye.pos} rotation={eye.rot} scale={eye.scale}>
-                    <mesh position={[0, 0, 0]}>
-                        <sphereGeometry args={[0.15, 16, 16]} />
-                        <meshBasicMaterial color="white" />
-                    </mesh>
-                    <mesh position={[0, 0, 0.12]}>
-                        <sphereGeometry args={[0.08, 16, 16]} />
-                        <meshBasicMaterial color="black" />
-                    </mesh>
-                </group>
-            ))}
-        </group>
     );
 };
 
@@ -105,53 +92,53 @@ const PreviewEyes = ({ isAnomaly }) => {
 const PreviewRoom = () => {
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
     const nextRoomStatus = useGameStore(state => state.nextRoomStatus);
-    const anomalyType = useGameStore(state => state.anomalyType);
+    const decoyLogs = useGameStore(state => state.decoyLogs);
 
     const position = [0, -1000, 0];
     const size = 10;
-    const nextThemeColor = "#ffffff";
+    // 部屋の色はカモフラージュで白（またはグレー）
+    const nextThemeColor = "#444444";
 
-    const showPhantom = useMemo(() => {
-        if (nextRoomStatus === 'SAFE') return Math.random() < 0.5;
-        // 【修正】nullチェックを追加
-        return anomalyType && anomalyType.startsWith('GHOST');
-    }, [nextRoomStatus, anomalyType]);
-
-    // 【修正】nullチェックを追加 (または初期値 'NORMAL' を設定)
-    const phantomType = nextRoomStatus === 'SAFE' ? 'NORMAL' : (anomalyType || 'NORMAL');
-    const showEyes = anomalyType === 'EYES_CLUSTER';
+    // デコイデータがない場合の警告
+    const showWarning = !decoyLogs || decoyLogs.length === 0;
 
     if (!isPreviewMode) return null;
 
     return (
         <group position={position}>
+            {/* 部屋の構造 (変更なし) */}
             <mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-
             <mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, size, 0]} rotation={[Math.PI, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-
             <mesh position={[0, size / 2, -size / 2 - 0.5]}><boxGeometry args={[size, size, 1]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-
             <mesh position={[0, size / 2, size / 2 + 0.5]}><boxGeometry args={[size, size, 1]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-
             <mesh position={[-size / 2 - 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-
             <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
 
-            {showPhantom && <PreviewPhantom type={phantomType} />}
-            <PreviewEyes isAnomaly={showEyes} />
+            {/* デコイ表示 */}
+            <PreviewPhantom />
 
+            {/* データなし警告 */}
+            {showWarning && (
+                <group position={[0, 2, 0]}>
+                    <mesh>
+                        <boxGeometry args={[3, 1, 0.1]} />
+                        <meshBasicMaterial color="red" />
+                    </mesh>
+                    {/* Textコンポーネントは削除したので、単純な赤い板で警告 */}
+                </group>
+            )}
         </group>
     );
 };
 
-// ... 以下、GridPlane, Ladder, Hatch, Levelコンポーネントは省略 (変更なし) ...
-// (実際の更新時はLevel.jsx全体を反映させてください)
+// ... 以下、GridPlane, Ladder, Hatch, Levelコンポーネント (既存のまま) ...
+// (実際のファイルではLevel.jsx全体を記述します)
 const GridPlane = ({ position, rotation, color = "#ffffff" }) => (
     <Grid
         position={position}

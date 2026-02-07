@@ -14,25 +14,39 @@ const getThemeColor = (floor) => {
   return Object.values(colorObj)[9];
 };
 
-// 異常のバリエーション定義
-const ANOMALY_TYPES = [
-  'GHOST_FAST',   // 亡霊が高速で動く
-  'GHOST_STARE',  // 亡霊がじっとこちらを見ている
-  'EYES_CLUSTER'  // 壁に大量の目がある
-];
-
 export const useGameStore = create((set, get) => ({
   floor: 1,
   themeColor: getThemeColor(1),
   availableHatches: 6,
   systemLogs: ["SYSTEM INITIALIZED...", "RECORDING STARTED..."],
 
+  // --- 既存のログシステム ---
   previousMoveLogs: [],
   previousGazeLogs: [],
   currentMoveLogs: [],
   currentGazeLogs: [],
-
   roomStartTime: Date.now(),
+
+  // --- 【追加】デジタル・デコイ機能 ---
+  decoyLogs: [],          // 録画されたデコイのデータ
+  isRecordingDecoy: false, // 録画中かどうか
+  decoyStartTime: 0,      // 録画開始時刻
+
+  startDecoyRecording: () => set({
+    isRecordingDecoy: true,
+    decoyLogs: [],
+    decoyStartTime: Date.now()
+  }),
+
+  stopDecoyRecording: () => set({
+    isRecordingDecoy: false
+  }),
+
+  addDecoyLog: (log) => set((state) => ({
+    decoyLogs: [...state.decoyLogs, log]
+  })),
+  // ----------------------------
+
   isClimbing: false,
   setIsClimbing: (isClimbing) => set({ isClimbing }),
 
@@ -43,16 +57,13 @@ export const useGameStore = create((set, get) => ({
   anomalyType: null,
 
   enterPreviewMode: (target) => {
-    // 【修正】動作確認用に確率を大幅にアップ (40% -> 80%)
-    const isAnomaly = Math.random() < 0.8;
-    let anomalyType = null;
+    // 異常発生率 (バランス調整で30%に戻します)
+    const isAnomaly = Math.random() < 0.3;
 
+    // 異常の種類 (デコイの破壊演出には直接影響しませんが、ログ用に残します)
+    let anomalyType = null;
     if (isAnomaly) {
-      anomalyType = ANOMALY_TYPES[Math.floor(Math.random() * ANOMALY_TYPES.length)];
-      // 【追加】デバッグ用に何が発生したかログに出す
-      get().addSystemLog(`DEBUG: ${anomalyType}`);
-    } else {
-      get().addSystemLog("DEBUG: NORMAL (SAFE)");
+      anomalyType = 'ANOMALY_DETECTED';
     }
 
     set({
@@ -86,6 +97,7 @@ export const useGameStore = create((set, get) => ({
         anomalyType: null,
         currentMoveLogs: [],
         previousMoveLogs: [],
+        decoyLogs: [], // デコイもリセット
         roomStartTime: Date.now()
       });
     } else {

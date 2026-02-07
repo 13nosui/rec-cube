@@ -4,8 +4,10 @@ export default function UI() {
     const floor = useGameStore(state => state.floor);
     const systemLogs = useGameStore(state => state.systemLogs);
     const themeColor = useGameStore(state => state.themeColor);
-    // 【追加】プレビューモードの状態取得
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
+    // 【追加】録画状態
+    const isRecordingDecoy = useGameStore(state => state.isRecordingDecoy);
+    const decoyLogs = useGameStore(state => state.decoyLogs);
 
     return (
         <div className="absolute inset-0 pointer-events-none select-none overflow-hidden font-mono">
@@ -36,13 +38,30 @@ export default function UI() {
                 ))}
             </div>
 
-            {/* Crosshair (プレビュー中は非表示にしてもよいが、見る場所のガイドとして残す) */}
+            {/* 【追加】デコイ録画インジケーター */}
+            <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
+                {isRecordingDecoy && (
+                    <div className="flex items-center gap-2 text-red-500 animate-pulse">
+                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                        <span className="font-bold tracking-widest">RECORDING DECOY...</span>
+                    </div>
+                )}
+                {!isRecordingDecoy && decoyLogs.length > 0 && (
+                    <div className="text-green-500 text-sm tracking-widest border border-green-500/30 px-2 py-1 rounded">
+                        DECOY DATA READY [{decoyLogs.length} FRAMES]
+                    </div>
+                )}
+                <div className="text-xs text-white/40">PRESS [R] TO REC/STOP</div>
+            </div>
+
+
+            {/* Crosshair */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center opacity-50">
                 <div className="w-1 h-1 bg-white rounded-full"></div>
                 <div className="absolute w-8 h-8 border border-white/20 rounded-full"></div>
             </div>
 
-            {/* 【追加】プレビュー中の操作ガイド */}
+            {/* プレビュー中の操作ガイド */}
             {isPreviewMode && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center">
                     <div className="inline-block bg-black/80 backdrop-blur-sm border border-white/20 p-8 rounded-lg animate-in fade-in zoom-in duration-300">
@@ -65,6 +84,13 @@ export default function UI() {
                                 <span className="text-white/60">DISCONNECT</span>
                             </div>
                         </div>
+
+                        {/* 警告メッセージ */}
+                        {(!decoyLogs || decoyLogs.length === 0) && (
+                            <div className="mt-4 text-red-500 text-xs tracking-widest animate-bounce">
+                                WARNING: NO DECOY DATA FOUND
+                            </div>
+                        )}
                     </div>
                 </div>
             )}
