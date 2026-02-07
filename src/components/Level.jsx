@@ -49,22 +49,19 @@ const Hatch = ({ position, rotation }) => {
                 <meshBasicMaterial color="#000000" />
             </mesh>
 
-            {/* グリッド（赤） */}
-            <Grid args={[2, 2]} cellSize={0.5} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="red" sectionColor="red" />
+            {/* 【削除】赤いグリッド線を削除しました */}
+            {/* <Grid args={[2, 2]} cellSize={0.5} cellThickness={2} sectionSize={2} sectionThickness={2} cellColor="red" sectionColor="red" /> */}
 
-            {/* 【追加】十字の取手（白） */}
+            {/* 十字の取手（白） */}
             <group position={[0, 0, 0.15]}>
-                {/* 縦の棒 */}
                 <mesh>
                     <boxGeometry args={[0.1, 0.8, 0.1]} />
                     <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
                 </mesh>
-                {/* 横の棒 */}
                 <mesh>
                     <boxGeometry args={[0.8, 0.1, 0.1]} />
                     <meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} />
                 </mesh>
-                {/* 中心軸 */}
                 <mesh position={[0, 0, -0.05]}>
                     <cylinderGeometry args={[0.15, 0.15, 0.1, 16]} />
                     <meshStandardMaterial color="#333" />
@@ -94,7 +91,6 @@ const Hatch = ({ position, rotation }) => {
 
 export default function Level() {
     const size = 10;
-    const availableHatches = useGameStore((state) => state.availableHatches) ?? 4;
 
     return (
         <group>
@@ -148,11 +144,13 @@ export default function Level() {
             </RigidBody>
             <GridPlane position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} />
 
-            {/* ハッチ (動的生成) */}
-            {availableHatches >= 1 && <Hatch position={[0, 2, -size / 2 + 0.1]} rotation={[0, 0, 0]} />}
-            {availableHatches >= 2 && <Hatch position={[0, 2, size / 2 - 0.1]} rotation={[0, Math.PI, 0]} />}
-            {availableHatches >= 3 && <Hatch position={[-size / 2 + 0.1, 2, 0]} rotation={[0, Math.PI / 2, 0]} />}
-            {availableHatches >= 4 && <Hatch position={[size / 2 - 0.1, 2, 0]} rotation={[0, -Math.PI / 2, 0]} />}
+            {/* --- ハッチ (常に全方向に出現) --- */}
+            <Hatch position={[0, 2, -size / 2 + 0.1]} rotation={[0, 0, 0]} /> {/* 奥 */}
+            <Hatch position={[0, 2, size / 2 - 0.1]} rotation={[0, Math.PI, 0]} /> {/* 手前 */}
+            <Hatch position={[-size / 2 + 0.1, 2, 0]} rotation={[0, Math.PI / 2, 0]} /> {/* 左 */}
+            <Hatch position={[size / 2 - 0.1, 2, 0]} rotation={[0, -Math.PI / 2, 0]} /> {/* 右 */}
+            <Hatch position={[0, size - 0.1, 0]} rotation={[Math.PI / 2, 0, 0]} /> {/* 天井 */}
+            <Hatch position={[0, 0.1, 0]} rotation={[-Math.PI / 2, 0, 0]} /> {/* 床 */}
         </group>
     );
 }

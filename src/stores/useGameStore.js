@@ -1,65 +1,53 @@
 import { create } from 'zustand';
-import { playBeep, playBuzz } from '../utils/AudioSynth';
 
-export const useGameStore = create((set, get) => ({
-  moveLogs: [],
-  gazeLogs: [],
+export const useGameStore = create((set) => ({
+  floor: 1,
+  availableHatches: 6, // 常に6個
+  systemLogs: ["SYSTEM INITIALIZED...", "RECORDING STARTED..."],
+
+  // 【表示用】前の部屋のデータ（最初は空）
   previousMoveLogs: [],
   previousGazeLogs: [],
-  floor: 0,
 
-  // Phase 5: 新しい状態
+  // 【記録用】現在の部屋のデータ
+  currentMoveLogs: [],
+  currentGazeLogs: [],
+
   roomStartTime: Date.now(),
-  availableHatches: 4,
-  systemLogs: [],
 
-  addLog: (logEntry) => set((state) => ({
-    moveLogs: [...state.moveLogs, logEntry]
+  nextRoom: () => set((state) => {
+    // 現在の記録が存在するかチェック
+    const hasMoveLogs = state.currentMoveLogs && state.currentMoveLogs.length > 0;
+    const hasGazeLogs = state.currentGazeLogs && state.currentGazeLogs.length > 0;
+
+    return {
+      floor: state.floor + 1,
+      availableHatches: 6,
+
+      // 【重要】現在の記録を「過去の記録」として確定させる
+      // データがない場合は空配列をセットして、変な表示が出ないようにする
+      previousMoveLogs: hasMoveLogs ? [...state.currentMoveLogs] : [],
+      previousGazeLogs: hasGazeLogs ? [...state.currentGazeLogs] : [],
+
+      // 【重要】新しい部屋用に記録をリセットする
+      currentMoveLogs: [],
+      currentGazeLogs: [],
+
+      roomStartTime: Date.now(),
+      systemLogs: [`ROOM ${String(state.floor + 1).padStart(4, '0')} ENTERED.`, ...state.systemLogs].slice(0, 5)
+    };
+  }),
+
+  // ログ追加時は「現在の記録 (current)」の方に追加する
+  addLog: (log) => set((state) => ({
+    currentMoveLogs: [...state.currentMoveLogs, log]
   })),
 
-  // 視線ログ記録 + システムログ連動
-  addGazeLog: (point) => {
-    // 頻繁にログが出すぎないように少し間引く等の処理も可能ですが、
-    // ここではシンプルに記録します。
-    set((state) => ({ gazeLogs: [...state.gazeLogs, point] }));
-  },
+  addGazeLog: (point) => set((state) => ({
+    currentGazeLogs: [...state.currentGazeLogs, point]
+  })),
 
-  // システムメッセージを追加（同時に音を鳴らす）
-  addSystemLog: (message) => {
-    playBeep(); // ピッ！
-    const time = new Date().toLocaleTimeString('en-US', { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    set((state) => ({
-      systemLogs: [`[${time}] ${message}`, ...state.systemLogs].slice(0, 5) // 最新5件のみ保持
-    }));
-  },
-
-  nextRoom: () => {
-    playBuzz(); // ブゥン...
-    const state = get();
-
-    // 難易度調整ロジック
-    const duration = Date.now() - state.roomStartTime;
-    let nextHatches = state.availableHatches;
-
-    // 10秒以上迷っていたらハッチを減らす
-    if (duration > 10000) {
-      nextHatches = Math.max(1, state.availableHatches - 1);
-      // 遅延実行で次の部屋のログを出す（setの後で呼ぶため）
-      setTimeout(() => get().addSystemLog(`SUBJECT HESITATED. EXITS REDUCED TO ${nextHatches}.`), 500);
-    } else {
-      // 早ければハッチを回復（または維持）
-      // nextHatches = 4; // 回復させたい場合はコメントアウト解除
-      setTimeout(() => get().addSystemLog("SUBJECT PROCEEDING."), 500);
-    }
-
-    set((state) => ({
-      previousMoveLogs: [...state.moveLogs],
-      previousGazeLogs: [...state.gazeLogs],
-      moveLogs: [],
-      gazeLogs: [],
-      floor: state.floor + 1,
-      roomStartTime: Date.now(),
-      availableHatches: nextHatches, // 次の部屋のハッチ数更新
-    }));
-  },
+  addSystemLog: (msg) => set((state) => ({
+    systemLogs: [`[LOG] ${msg}`, ...state.systemLogs].slice(0, 5)
+  })),
 }));
