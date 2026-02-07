@@ -1,84 +1,79 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { useGameStore } from '../stores/useGameStore';
 import * as THREE from 'three';
+import { useGameStore } from '../stores/useGameStore';
 
 export default function Phantom() {
-    const previousMoveLogs = useGameStore(state => state.previousMoveLogs);
-    const roomStartTime = useGameStore(state => state.roomStartTime);
     const meshRef = useRef();
-
-    // 身長（高さ）を定義
-    const PHANTOM_HEIGHT = 1.8;
-
-    const material = useMemo(() => new THREE.MeshBasicMaterial({
-        color: '#00ffff',
-        wireframe: true,
-        transparent: true,
-        opacity: 0.6
-    }), []);
-
-    const geometry = useMemo(() => new THREE.BoxGeometry(0.75, PHANTOM_HEIGHT, 0.75), []);
-
-    useEffect(() => {
-        console.log("Phantom Data:", previousMoveLogs?.length);
-    }, [previousMoveLogs]);
+    // 過去の移動ログを取得
+    const previousMoveLogs = useGameStore((state) => state.previousMoveLogs);
+    const roomStartTime = useGameStore((state) => state.roomStartTime);
+    // 現在のテーマカラーを取得
+    const themeColor = useGameStore((state) => state.themeColor);
 
     useFrame(() => {
-        if (!meshRef.current) return;
-
-        if (!previousMoveLogs || previousMoveLogs.length < 2) {
-            meshRef.current.visible = false;
+        // メッシュまたはログがない場合は非表示にして戻る
+        if (!meshRef.current || !previousMoveLogs || previousMoveLogs.length < 2) {
+            if (meshRef.current) meshRef.current.visible = false;
             return;
         }
 
-        if (Array.isArray(previousMoveLogs[0])) {
-            meshRef.current.visible = false;
-            return;
-        }
-
-        const playbackTime = Date.now() - roomStartTime;
         const lastLog = previousMoveLogs[previousMoveLogs.length - 1];
+        const maxTime = lastLog.time;
+        // ループ全体の長さ（記録時間 + 2秒の待機時間）
+        // 2秒間姿を消してから、また最初から再生します
+        const loopDuration = maxTime + 2000;
 
-        if (playbackTime > lastLog.time) {
+        const currentTime = (Date.now() - roomStartTime) % loopDuration;
+
+        // 記録時間を過ぎている場合（待機時間中）は非表示にする
+        // これで「消えなくなった（固まったままになる）」問題を解決
+        if (currentTime > maxTime) {
             meshRef.current.visible = false;
             return;
         }
 
-        let nextIndex = previousMoveLogs.findIndex(log => log.time > playbackTime);
+        // 再生中は表示オン
+        meshRef.current.visible = true;
 
-        if (nextIndex <= 0) {
-            const startPos = previousMoveLogs[0].pos;
-            if (startPos) {
-                // 【修正】初期位置：足元(y=0)に接地させるため、中心を height/2 に設定
-                meshRef.current.position.set(startPos[0], PHANTOM_HEIGHT / 2, startPos[2]);
-                meshRef.current.visible = true;
-            }
-            return;
-        }
+        // --- スムーズな移動（線形補間） ---
+
+        // 現在の時間の「直後」にあるログを探す
+        let nextIndex = previousMoveLogs.findIndex(log => log.time > currentTime);
+
+        // 端の処理：見つからない場合や先頭の場合は調整
+        if (nextIndex === -1) nextIndex = previousMoveLogs.length - 1;
+        if (nextIndex === 0) nextIndex = 1;
 
         const prevLog = previousMoveLogs[nextIndex - 1];
         const nextLog = previousMoveLogs[nextIndex];
 
-        if (prevLog && nextLog && prevLog.pos && nextLog.pos) {
-            const duration = nextLog.time - prevLog.time;
-            const elapsed = playbackTime - prevLog.time;
-            const alpha = duration > 0 ? Math.max(0, Math.min(1, elapsed / duration)) : 0;
+        // 経過時間の割合（0.0 〜 1.0）を計算
+        const timeDiff = nextLog.time - prevLog.time;
+        // 0除算防止
+        const alpha = timeDiff > 0 ? (currentTime - prevLog.time) / timeDiff : 0;
 
-            // X, Z 座標は補間する
-            const x = THREE.MathUtils.lerp(prevLog.pos[0], nextLog.pos[0], alpha);
-            const z = THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha);
+        // 位置を滑らかに補間
+        const x = THREE.MathUtils.lerp(prevLog.pos[0], nextLog.pos[0], alpha);
+        // Y軸も含めることで、はしごの昇降も滑らかに再現されます
+        const y = THREE.MathUtils.lerp(prevLog.pos[1], nextLog.pos[1], alpha);
+        const z = THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha);
 
-            // 【修正】Y座標はログを使わず、「足元が接地する高さ」に固定する
-            // Boxの中心が原点なので、足元を y=0 に合わせるには、中心を height/2 に持ち上げる
-            const y = PHANTOM_HEIGHT / 2;
-
-            meshRef.current.position.set(x, y, z);
-            meshRef.current.visible = true;
-        }
+        meshRef.current.position.set(x, y, z);
     });
 
+    // そもそもデータがない場合はレンダリングしない
+    if (!previousMoveLogs || previousMoveLogs.length === 0) return null;
+
     return (
-        <mesh ref={meshRef} geometry={geometry} material={material} />
+        <mesh ref={meshRef}>
+            <boxGeometry args={[0.75, 1.8, 0.75]} />
+            <meshBasicMaterial
+                color={themeColor}
+                wireframe={true}
+                transparent
+                opacity={0.6}
+            />
+        </mesh>
     );
 }
