@@ -3,13 +3,14 @@ import { Physics } from '@react-three/rapier';
 import { KeyboardControls } from '@react-three/drei';
 import { Suspense } from 'react';
 
-// コンポーネントのインポート確認
+// コンポーネントのインポート
 import Player from './components/Player';
 import Level from './components/Level';
 import UI from './components/UI';
 import Traces from './components/Traces';
-import Phantom from './components/Phantom';        // ← これが必要です
-import LogProjection from './components/LogProjection'; // ← これが必要です
+import Phantom from './components/Phantom';
+import LogProjection from './components/LogProjection';
+import Eyes from './components/Eyes'; // ← 復活！
 
 export default function App() {
   const keyboardMap = [
@@ -33,9 +34,13 @@ export default function App() {
           <Physics gravity={[0, -9.8, 0]}>
             <Player />
             <Level />
-            <Traces />
-            <Phantom />
-            <LogProjection />
+
+            {/* --- 恐怖の記録たち --- */}
+            <Traces />         {/* 足跡 */}
+            <Phantom />        {/* 亡霊 */}
+            <LogProjection />  {/* 文字 */}
+            <Eyes />           {/* 目 (復活！) */}
+
           </Physics>
           <ambientLight intensity={0.5} />
         </Suspense>
