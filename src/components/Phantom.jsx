@@ -8,8 +8,9 @@ export default function Phantom() {
     // 過去の移動ログを取得
     const previousMoveLogs = useGameStore((state) => state.previousMoveLogs);
     const roomStartTime = useGameStore((state) => state.roomStartTime);
-    // 現在のテーマカラーを取得
-    const themeColor = useGameStore((state) => state.themeColor);
+
+    // 【削除】テーマカラーはもう使わないので削除
+    // const themeColor = useGameStore((state) => state.themeColor);
 
     useFrame(() => {
         // メッシュまたはログがない場合は非表示にして戻る
@@ -21,13 +22,11 @@ export default function Phantom() {
         const lastLog = previousMoveLogs[previousMoveLogs.length - 1];
         const maxTime = lastLog.time;
         // ループ全体の長さ（記録時間 + 2秒の待機時間）
-        // 2秒間姿を消してから、また最初から再生します
         const loopDuration = maxTime + 2000;
 
         const currentTime = (Date.now() - roomStartTime) % loopDuration;
 
         // 記録時間を過ぎている場合（待機時間中）は非表示にする
-        // これで「消えなくなった（固まったままになる）」問題を解決
         if (currentTime > maxTime) {
             meshRef.current.visible = false;
             return;
@@ -37,25 +36,18 @@ export default function Phantom() {
         meshRef.current.visible = true;
 
         // --- スムーズな移動（線形補間） ---
-
-        // 現在の時間の「直後」にあるログを探す
         let nextIndex = previousMoveLogs.findIndex(log => log.time > currentTime);
 
-        // 端の処理：見つからない場合や先頭の場合は調整
         if (nextIndex === -1) nextIndex = previousMoveLogs.length - 1;
         if (nextIndex === 0) nextIndex = 1;
 
         const prevLog = previousMoveLogs[nextIndex - 1];
         const nextLog = previousMoveLogs[nextIndex];
 
-        // 経過時間の割合（0.0 〜 1.0）を計算
         const timeDiff = nextLog.time - prevLog.time;
-        // 0除算防止
         const alpha = timeDiff > 0 ? (currentTime - prevLog.time) / timeDiff : 0;
 
-        // 位置を滑らかに補間
         const x = THREE.MathUtils.lerp(prevLog.pos[0], nextLog.pos[0], alpha);
-        // Y軸も含めることで、はしごの昇降も滑らかに再現されます
         const y = THREE.MathUtils.lerp(prevLog.pos[1], nextLog.pos[1], alpha);
         const z = THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha);
 
@@ -68,11 +60,12 @@ export default function Phantom() {
     return (
         <mesh ref={meshRef}>
             <boxGeometry args={[0.75, 1.8, 0.75]} />
+            {/* 【修正】黒い塗りのマテリアルに変更 */}
             <meshBasicMaterial
-                color={themeColor}
-                wireframe={true}
+                color="#000000"  // 黒
+                wireframe={false} // 塗りつぶし
                 transparent
-                opacity={0.6}
+                opacity={0.8}     // 濃い影のようにする
             />
         </mesh>
     );
