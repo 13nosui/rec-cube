@@ -46,11 +46,15 @@ export const useGameStore = create((set, get) => ({
   anomalyType: null,
 
   enterPreviewMode: (target) => {
-    // 【変更】プレビュー開始時に、ここまでの現在の行動ログをデコイとしてコピー
-    const currentLogs = get().currentMoveLogs;
+    // 【修正】 前の階層のログを取得するように変更
+    const previousLogs = get().previousMoveLogs;
 
-    // 異常発生率 (30%)
-    const isAnomaly = Math.random() < 0.3;
+    // 【追加】現在の階層を取得
+    const floor = get().floor;
+
+    // 【変更】Floor 1 なら異常なし(false)、それ以外なら80%の確率で異常
+    const isAnomaly = floor === 1 ? false : Math.random() < 0.8;
+
     let anomalyType = null;
 
     if (isAnomaly) {
@@ -63,8 +67,8 @@ export const useGameStore = create((set, get) => ({
       previewTarget: target,
       nextRoomStatus: isAnomaly ? 'ANOMALY' : 'SAFE',
       anomalyType: anomalyType,
-      // 現在の動きをデコイデータとしてセット
-      decoyLogs: [...currentLogs]
+      // 【修正】前の階層の動きをデコイデータとしてセット
+      decoyLogs: [...previousLogs]
     });
   },
 

@@ -8,11 +8,12 @@ import * as THREE from 'three';
 // --- 破壊エフェクト（赤いワイヤーボクセルの飛散） ---
 const ShatterEffect = ({ position }) => {
     const particleCount = 40;
+    const spawnY = position?.y !== undefined ? position.y : (position?.[1] || 0);
     const particles = useMemo(() => {
         return new Array(particleCount).fill(0).map(() => ({
             velocity: new THREE.Vector3(
                 (Math.random() - 0.5) * 5,
-                (Math.random() - 0.5) * 5 + 2, // 少し上に跳ねる
+                (Math.random() - 0.5) * 5 + 4, // 少し上に跳ねる
                 (Math.random() - 0.5) * 5
             ),
             rotation: new THREE.Vector3(
@@ -42,15 +43,18 @@ const ShatterEffect = ({ position }) => {
             child.position.add(p.velocity.clone().multiplyScalar(delta));
 
             // 回転
-            child.rotation.x += p.rotation.x * delta;
-            child.rotation.y += p.rotation.y * delta;
+            // child.rotation.x += p.rotation.x * delta;
+            // child.rotation.y += p.rotation.y * delta;
+
+            // ボクセルの中心から底面までの距離（geometryが1x1x1なので scale / 2）
+            const halfHeight = p.scale / 2;
 
             // 地面衝突 (簡易)
-            if (child.position.y < 0) {
-                child.position.y = 0;
-                p.velocity.y *= -0.5;
-                p.velocity.x *= 0.8;
-                p.velocity.z *= 0.8;
+            if (child.position.y - halfHeight < -spawnY) {
+                child.position.y = -spawnY + halfHeight; // 床の位置に補正
+                p.velocity.y *= -0.1; // バウンド係数
+                p.velocity.x *= 0.8; // 摩擦
+                p.velocity.z *= 0.8; // 摩擦
             }
         });
     });
@@ -152,12 +156,14 @@ const PreviewRoom = () => {
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
     const nextRoomStatus = useGameStore(state => state.nextRoomStatus);
     const decoyLogs = useGameStore(state => state.decoyLogs);
+    const floor = useGameStore(state => state.floor);
 
     const position = [0, -1000, 0];
     const size = 10;
     const nextThemeColor = "#444444";
 
-    const showWarning = !decoyLogs || decoyLogs.length === 0;
+    // Floor 1以外で、ログがない場合のみ警告を表示する
+    const showWarning = floor > 1 && (!decoyLogs || decoyLogs.length === 0);
 
     if (!isPreviewMode) return null;
 
@@ -177,10 +183,10 @@ const PreviewRoom = () => {
             <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
             <Grid position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
 
-            {/* デコイ表示 */}
-            <PreviewPhantom />
+            {/* 【修正】デコイ表示：Floor 1（最初の部屋）では表示しない */}
+            {floor > 1 && <PreviewPhantom />}
 
-            {/* データなし警告 */}
+            {/* データなし警告 (Floor 2以降のみ表示) */}
             {showWarning && (
                 <group position={[0, 2, 0]}>
                     <mesh>
