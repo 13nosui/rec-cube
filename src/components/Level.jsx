@@ -5,6 +5,8 @@ import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '../stores/useGameStore';
 import * as THREE from 'three';
 
+// --- ShatterEffect, PreviewPhantom, PreviewRoom は変更なしのため省略 ---
+// (※既存のコードを維持してください)
 // --- 破壊エフェクト（赤いワイヤーボクセルの飛散） ---
 const ShatterEffect = ({ position }) => {
     const particleCount = 40;
@@ -29,32 +31,16 @@ const ShatterEffect = ({ position }) => {
 
     useFrame((state, delta) => {
         if (!meshRef.current) return;
-
-        // 子要素（Instances）の更新はやや複雑なので、
-        // ここでは簡易的に個別のmeshをレンダリングするか、
-        // あるいはgroup内のchildrenを操作する
         meshRef.current.children.forEach((child, i) => {
             const p = particles[i];
-
-            // 重力
             p.velocity.y -= 9.8 * delta;
-
-            // 位置更新
             child.position.add(p.velocity.clone().multiplyScalar(delta));
-
-            // 回転
-            // child.rotation.x += p.rotation.x * delta;
-            // child.rotation.y += p.rotation.y * delta;
-
-            // ボクセルの中心から底面までの距離（geometryが1x1x1なので scale / 2）
             const halfHeight = p.scale / 2;
-
-            // 地面衝突 (簡易)
             if (child.position.y - halfHeight < -spawnY) {
-                child.position.y = -spawnY + halfHeight; // 床の位置に補正
-                p.velocity.y *= -0.1; // バウンド係数
-                p.velocity.x *= 0.8; // 摩擦
-                p.velocity.z *= 0.8; // 摩擦
+                child.position.y = -spawnY + halfHeight;
+                p.velocity.y *= -0.1;
+                p.velocity.x *= 0.8;
+                p.velocity.z *= 0.8;
             }
         });
     });
@@ -77,18 +63,13 @@ const PreviewPhantom = () => {
     const decoyLogs = useGameStore(state => state.decoyLogs);
     const nextRoomStatus = useGameStore(state => state.nextRoomStatus);
 
-    // デコイ再生用のローカル時間
     const [playbackTime, setPlaybackTime] = useState(0);
-    // デコイが「死んだ」かどうか
     const [isDead, setIsDead] = useState(false);
 
-    // 死亡タイミング
     const deathTime = useMemo(() => {
         if (nextRoomStatus !== 'ANOMALY') return Infinity;
         if (!decoyLogs || decoyLogs.length === 0) return 0;
-
         const maxTime = decoyLogs[decoyLogs.length - 1].time;
-        // 録画時間の 30% 〜 70% の間のどこかで死ぬ
         return maxTime * (0.3 + Math.random() * 0.4);
     }, [nextRoomStatus, decoyLogs]);
 
@@ -97,27 +78,18 @@ const PreviewPhantom = () => {
         if (isDead) return;
 
         let newTime = playbackTime + (delta * 1000);
-
-        // 異常発生時刻を超えたら死亡
-        if (newTime > deathTime) {
-            setIsDead(true);
-            return;
-        }
+        if (newTime > deathTime) { setIsDead(true); return; }
 
         const lastLog = decoyLogs[decoyLogs.length - 1];
-        if (newTime > lastLog.time) {
-            newTime = 0; // ループ
-        }
+        if (newTime > lastLog.time) { newTime = 0; }
         setPlaybackTime(newTime);
 
-        // 位置補間
         let nextIndex = decoyLogs.findIndex(log => log.time > newTime);
         if (nextIndex === -1) nextIndex = decoyLogs.length - 1;
         if (nextIndex === 0) nextIndex = 1;
 
         const prevLog = decoyLogs[nextIndex - 1];
         const nextLog = decoyLogs[nextIndex];
-
         const timeDiff = nextLog.time - prevLog.time;
         const alpha = timeDiff > 0 ? (newTime - prevLog.time) / timeDiff : 0;
 
@@ -130,23 +102,12 @@ const PreviewPhantom = () => {
     });
 
     if (!decoyLogs || decoyLogs.length === 0) return null;
-
-    if (isDead) {
-        // 死亡時は本体を隠し、破壊エフェクトを表示
-        return (
-            <ShatterEffect position={meshRef.current ? meshRef.current.position : [0, 0, 0]} />
-        );
-    }
+    if (isDead) return <ShatterEffect position={meshRef.current ? meshRef.current.position : [0, 0, 0]} />;
 
     return (
         <mesh ref={meshRef}>
             <boxGeometry args={[0.75, 0.75, 1.8]} />
-            <meshBasicMaterial
-                color="#00ff00"
-                wireframe={true}
-                transparent
-                opacity={0.6}
-            />
+            <meshBasicMaterial color="#00ff00" wireframe={true} transparent opacity={0.6} />
         </mesh>
     );
 };
@@ -154,7 +115,6 @@ const PreviewPhantom = () => {
 // --- プレビュー用の部屋コンポーネント ---
 const PreviewRoom = () => {
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
-    // ★追加
     const previewTimeLeft = useGameStore(state => state.previewTimeLeft);
     const consumePreviewTime = useGameStore(state => state.consumePreviewTime);
 
@@ -165,28 +125,19 @@ const PreviewRoom = () => {
     const position = [0, -1000, 0];
     const size = 10;
     const nextThemeColor = "#444444";
-
-    // Floor 1以外で、ログがない場合のみ警告を表示する
     const showWarning = floor > 1 && (!decoyLogs || decoyLogs.length === 0);
 
-    // ★追加: 時間消費ロジック
     useFrame((state, delta) => {
         if (isPreviewMode && previewTimeLeft > 0) {
-            // delta (秒) をミリ秒に変換して消費
             consumePreviewTime(delta * 1000);
         }
     });
 
     if (!isPreviewMode) return null;
-
-    // ★追加: 時間切れなら何も表示しない (暗闇)
-    if (previewTimeLeft <= 0) {
-        return null;
-    }
+    if (previewTimeLeft <= 0) return null;
 
     return (
         <group position={position}>
-            {/* 部屋の構造 */}
             <mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
             <mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
@@ -199,39 +150,19 @@ const PreviewRoom = () => {
             <Grid position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
             <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
             <Grid position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-
-            {/* 【修正】デコイ表示：Floor 1（最初の部屋）では表示しない */}
             {floor > 1 && <PreviewPhantom />}
-
-            {/* データなし警告 (Floor 2以降のみ表示) */}
             {showWarning && (
                 <group position={[0, 2, 0]}>
-                    <mesh>
-                        <boxGeometry args={[3, 1, 0.1]} />
-                        <meshBasicMaterial color="red" />
-                    </mesh>
+                    <mesh><boxGeometry args={[3, 1, 0.1]} /><meshBasicMaterial color="red" /></mesh>
                 </group>
             )}
         </group>
     );
 };
 
-// ... (以下、GridPlane, Ladder, Hatch, Levelコンポーネントは既存のまま) ...
+// ... GridPlane, Ladder は既存のまま ...
 const GridPlane = ({ position, rotation, color = "#ffffff" }) => (
-    <Grid
-        position={position}
-        rotation={rotation}
-        args={[10, 10]}
-        sectionSize={10}
-        sectionThickness={1.5}
-        cellSize={0.5}
-        cellThickness={1}
-        cellColor={color}
-        sectionColor={color}
-        fadeDistance={50}
-        fadeStrength={1}
-        infiniteGrid={false}
-    />
+    <Grid position={position} rotation={rotation} args={[10, 10]} sectionSize={10} sectionThickness={1.5} cellSize={0.5} cellThickness={1} cellColor={color} sectionColor={color} fadeDistance={50} fadeStrength={1} infiniteGrid={false} />
 );
 
 const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
@@ -239,30 +170,17 @@ const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
     const rungs = useMemo(() => {
         const count = Math.floor(height / 0.4);
         return new Array(count).fill(0).map((_, i) => (
-            <mesh key={i} position={[0, -height / 2 + 0.2 + i * 0.4, 0]}>
-                <boxGeometry args={[0.6, 0.05, 0.05]} />
-                <meshStandardMaterial color="#555" />
-            </mesh>
+            <mesh key={i} position={[0, -height / 2 + 0.2 + i * 0.4, 0]}><boxGeometry args={[0.6, 0.05, 0.05]} /><meshStandardMaterial color="#555" /></mesh>
         ));
     }, [height]);
-
     return (
         <group position={position} rotation={rotation}>
             <group>
-                <mesh position={[-0.35, 0, 0]}>
-                    <boxGeometry args={[0.05, height, 0.05]} />
-                    <meshStandardMaterial color="#777" />
-                </mesh>
-                <mesh position={[0.35, 0, 0]}>
-                    <boxGeometry args={[0.05, height, 0.05]} />
-                    <meshStandardMaterial color="#777" />
-                </mesh>
+                <mesh position={[-0.35, 0, 0]}><boxGeometry args={[0.05, height, 0.05]} /><meshStandardMaterial color="#777" /></mesh>
+                <mesh position={[0.35, 0, 0]}><boxGeometry args={[0.05, height, 0.05]} /><meshStandardMaterial color="#777" /></mesh>
                 {rungs}
             </group>
-            <CuboidCollider
-                sensor
-                args={[0.4, height / 2, 0.4]}
-                position={[0, 0, 0]}
+            <CuboidCollider sensor args={[0.4, height / 2, 0.4]} position={[0, 0, 0]}
                 onIntersectionEnter={(p) => p.other.rigidBodyObject?.name === "player" && setIsClimbing(true)}
                 onIntersectionExit={(p) => p.other.rigidBodyObject?.name === "player" && setIsClimbing(false)}
             />
@@ -270,10 +188,12 @@ const Ladder = ({ position, height = 5, rotation = [0, 0, 0] }) => {
     );
 };
 
+// ★ Hatchを修正: setNearbyHatch を呼ぶ
 const Hatch = ({ position, rotation, direction }) => {
     const enterPreviewMode = useGameStore((state) => state.enterPreviewMode);
     const isPreviewMode = useGameStore((state) => state.isPreviewMode);
     const addSystemLog = useGameStore((state) => state.addSystemLog);
+    const setNearbyHatch = useGameStore((state) => state.setNearbyHatch); // 追加
     const [isNear, setIsNear] = useState(false);
 
     useEffect(() => {
@@ -289,10 +209,7 @@ const Hatch = ({ position, rotation, direction }) => {
 
     return (
         <group position={position} rotation={rotation}>
-            <mesh position={[0, 0, 0.05]}>
-                <planeGeometry args={[2, 2]} />
-                <meshBasicMaterial color="#000000" />
-            </mesh>
+            <mesh position={[0, 0, 0.05]}><planeGeometry args={[2, 2]} /><meshBasicMaterial color="#000000" /></mesh>
             <group position={[0, 0, 0.15]}>
                 <mesh><boxGeometry args={[0.1, 0.8, 0.1]} /><meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} /></mesh>
                 <mesh><boxGeometry args={[0.8, 0.1, 0.1]} /><meshStandardMaterial color="white" emissive="white" emissiveIntensity={0.5} /></mesh>
@@ -305,11 +222,15 @@ const Hatch = ({ position, rotation, direction }) => {
                 onIntersectionEnter={(p) => {
                     if (p.other.rigidBodyObject?.name === "player") {
                         setIsNear(true);
-                        if (!isPreviewMode && addSystemLog) addSystemLog("PRESS 'E' TO HACK CAMERA");
+                        setNearbyHatch(direction); // Storeに方向を保存
+                        if (!isPreviewMode && addSystemLog) addSystemLog("PRESS 'E' OR [HACK] TO CAMERA");
                     }
                 }}
                 onIntersectionExit={(p) => {
-                    if (p.other.rigidBodyObject?.name === "player") setIsNear(false);
+                    if (p.other.rigidBodyObject?.name === "player") {
+                        setIsNear(false);
+                        setNearbyHatch(null); // Storeをリセット
+                    }
                 }}
             />
         </group>
@@ -339,29 +260,17 @@ export default function Level() {
     return (
         <group>
             <group>
-                <RigidBody type="fixed" colliders="cuboid">
-                    <mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshStandardMaterial color="#000000" /></mesh>
-                </RigidBody>
+                <RigidBody type="fixed" colliders="cuboid"><mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshStandardMaterial color="#000000" /></mesh></RigidBody>
                 <GridPlane position={[0, 0, 0]} rotation={[0, 0, 0]} color={themeColor} />
-                <RigidBody type="fixed" colliders="cuboid">
-                    <mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshStandardMaterial color="#000000" /></mesh>
-                </RigidBody>
+                <RigidBody type="fixed" colliders="cuboid"><mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshStandardMaterial color="#000000" /></mesh></RigidBody>
                 <GridPlane position={[0, size, 0]} rotation={[Math.PI, 0, 0]} color={themeColor} />
-                <RigidBody type="fixed" colliders="cuboid">
-                    <mesh position={[0, size / 2, -size / 2 - 0.5]}><boxGeometry args={[size, size, 1]} /><meshStandardMaterial color="#000000" /></mesh>
-                </RigidBody>
+                <RigidBody type="fixed" colliders="cuboid"><mesh position={[0, size / 2, -size / 2 - 0.5]}><boxGeometry args={[size, size, 1]} /><meshStandardMaterial color="#000000" /></mesh></RigidBody>
                 <GridPlane position={[0, size / 2, -size / 2]} rotation={[Math.PI / 2, 0, 0]} color={themeColor} />
-                <RigidBody type="fixed" colliders="cuboid">
-                    <mesh position={[0, size / 2, size / 2 + 0.5]}><boxGeometry args={[size, size, 1]} /><meshStandardMaterial color="#000000" /></mesh>
-                </RigidBody>
+                <RigidBody type="fixed" colliders="cuboid"><mesh position={[0, size / 2, size / 2 + 0.5]}><boxGeometry args={[size, size, 1]} /><meshStandardMaterial color="#000000" /></mesh></RigidBody>
                 <GridPlane position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} color={themeColor} />
-                <RigidBody type="fixed" colliders="cuboid">
-                    <mesh position={[-size / 2 - 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
-                </RigidBody>
+                <RigidBody type="fixed" colliders="cuboid"><mesh position={[-size / 2 - 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh></RigidBody>
                 <GridPlane position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} color={themeColor} />
-                <RigidBody type="fixed" colliders="cuboid">
-                    <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
-                </RigidBody>
+                <RigidBody type="fixed" colliders="cuboid"><mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh></RigidBody>
                 <GridPlane position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} color={themeColor} />
 
                 <Hatch position={[0, size / 2, -size / 2 + 0.1]} rotation={[0, 0, 0]} direction="back" />

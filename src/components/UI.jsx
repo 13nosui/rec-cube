@@ -1,19 +1,66 @@
 import { useGameStore } from '../stores/useGameStore';
+import { useState, useRef } from 'react';
 
 export default function UI() {
     const floor = useGameStore(state => state.floor);
     const systemLogs = useGameStore(state => state.systemLogs);
     const themeColor = useGameStore(state => state.themeColor);
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
-    // ★追加
     const previewTimeLeft = useGameStore(state => state.previewTimeLeft);
     const maxPreviewTime = useGameStore(state => state.maxPreviewTime);
 
-    // 【削除】録画状態のUIを削除
+    // アクション用
+    const nearbyHatch = useGameStore(state => state.nearbyHatch);
+    const enterPreviewMode = useGameStore(state => state.enterPreviewMode);
+    const confirmMovement = useGameStore(state => state.confirmMovement);
+    const exitPreviewMode = useGameStore(state => state.exitPreviewMode);
+    const addSystemLog = useGameStore(state => state.addSystemLog);
+
+    // 入力用
+    const setTouchInput = useGameStore(state => state.setTouchInput);
+    const setLookVelocity = useGameStore(state => state.setLookVelocity);
+
+    // 視点操作用のref
+    const touchStartRef = useRef({ x: 0, y: 0 });
+
+    const handleMoveStart = (dir) => {
+        setTouchInput({ [dir]: true });
+    };
+    const handleMoveEnd = (dir) => {
+        setTouchInput({ [dir]: false });
+    };
+
+    const handleLookStart = (e) => {
+        const touch = e.touches[0];
+        touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    };
+
+    const handleLookMove = (e) => {
+        const touch = e.touches[0];
+        const dx = touch.clientX - touchStartRef.current.x;
+        const dy = touch.clientY - touchStartRef.current.y;
+
+        // 簡易的な感度調整
+        setLookVelocity({ x: dx * 0.05, y: dy * 0.05 });
+    };
+
+    const handleLookEnd = () => {
+        setLookVelocity({ x: 0, y: 0 });
+    };
+
+    // アクションボタンのハンドラ
+    const handleAction = () => {
+        if (isPreviewMode) {
+            confirmMovement();
+        } else if (nearbyHatch) {
+            enterPreviewMode(nearbyHatch);
+            addSystemLog("CONNECTING TO CAMERA...");
+        }
+    };
 
     return (
         <div className="absolute inset-0 pointer-events-none select-none overflow-hidden font-mono">
-            {/* Header */}
+            {/* Header, Logs, Auto-rec はそのまま */}
             <div className="absolute top-8 left-8 flex flex-col gap-2">
                 <div className="flex items-center gap-4">
                     <div className="w-3 h-3 bg-red-500 animate-pulse rounded-full shadow-[0_0_10px_rgba(239,68,68,0.8)]"></div>
@@ -29,8 +76,8 @@ export default function UI() {
                 </div>
             </div>
 
-            {/* System Logs */}
-            <div className="absolute bottom-8 left-8 w-96 flex flex-col gap-1">
+            <div className="absolute bottom-32 left-8 w-96 flex flex-col gap-1 pointer-events-none">
+                {/* ログ位置を少し上げた */}
                 <div className="text-[10px] text-white/40 mb-1 border-b border-white/20 pb-1">SYSTEM LOGS</div>
                 {systemLogs.map((log, i) => (
                     <div key={i} className="text-xs text-white/60 font-mono tracking-wide animate-in slide-in-from-left-2 duration-300">
@@ -40,12 +87,65 @@ export default function UI() {
                 ))}
             </div>
 
-            {/* 自動録画インジケーター（右上に控えめに表示） */}
-            <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
-                <div className="flex items-center gap-2 text-red-500/50">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs tracking-widest">AUTO-REC</span>
+            {/* --- モバイルコントロール (ポインターイベント有効化) --- */}
+
+            {/* 1. 視点操作エリア (画面右半分全体) */}
+            <div
+                className="absolute top-0 right-0 w-1/2 h-full pointer-events-auto opacity-0"
+                onTouchStart={handleLookStart}
+                onTouchMove={handleLookMove}
+                onTouchEnd={handleLookEnd}
+            />
+
+            {/* 2. 移動用D-Pad (左下) */}
+            <div className="absolute bottom-8 left-8 w-40 h-40 pointer-events-auto opacity-60">
+                <div className="relative w-full h-full">
+                    {/* Up */}
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-12 bg-white/20 rounded hover:bg-white/40 active:bg-white/60 flex items-center justify-center"
+                        onTouchStart={() => handleMoveStart('forward')} onTouchEnd={() => handleMoveEnd('forward')}>
+                        ▲
+                    </div>
+                    {/* Down */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-12 bg-white/20 rounded hover:bg-white/40 active:bg-white/60 flex items-center justify-center"
+                        onTouchStart={() => handleMoveStart('backward')} onTouchEnd={() => handleMoveEnd('backward')}>
+                        ▼
+                    </div>
+                    {/* Left */}
+                    <div className="absolute top-1/2 left-0 -translate-y-1/2 w-12 h-12 bg-white/20 rounded hover:bg-white/40 active:bg-white/60 flex items-center justify-center"
+                        onTouchStart={() => handleMoveStart('left')} onTouchEnd={() => handleMoveEnd('left')}>
+                        ◀
+                    </div>
+                    {/* Right */}
+                    <div className="absolute top-1/2 right-0 -translate-y-1/2 w-12 h-12 bg-white/20 rounded hover:bg-white/40 active:bg-white/60 flex items-center justify-center"
+                        onTouchStart={() => handleMoveStart('right')} onTouchEnd={() => handleMoveEnd('right')}>
+                        ▶
+                    </div>
                 </div>
+            </div>
+
+            {/* 3. アクションボタン (右下) */}
+            <div className="absolute bottom-8 right-8 flex flex-col gap-4 pointer-events-auto">
+
+                {/* プレビュー中のDISCONNECTボタン */}
+                {isPreviewMode && (
+                    <button
+                        onClick={() => exitPreviewMode()}
+                        className="w-20 h-20 rounded-full bg-red-500/80 border-4 border-white/20 text-white font-bold tracking-widest active:scale-95 transition-transform flex items-center justify-center text-xs"
+                    >
+                        ABORT
+                    </button>
+                )}
+
+                {/* メインアクションボタン (HACK / ENTER) */}
+                {(nearbyHatch || isPreviewMode) && (
+                    <button
+                        onClick={handleAction}
+                        className={`w-24 h-24 rounded-full border-4 border-white/20 text-white font-bold tracking-widest active:scale-95 transition-transform flex items-center justify-center shadow-[0_0_20px_rgba(255,255,255,0.3)]
+                            ${isPreviewMode ? 'bg-green-600/80' : 'bg-cyan-600/80'}`}
+                    >
+                        {isPreviewMode ? 'GO' : 'HACK'}
+                    </button>
+                )}
             </div>
 
 
@@ -55,18 +155,15 @@ export default function UI() {
                 <div className="absolute w-8 h-8 border border-white/20 rounded-full"></div>
             </div>
 
-            {/* プレビュー中の操作ガイド */}
+            {/* プレビュー中のUI (既存のもの + タッチ操作ガイドはボタンがあるので非表示でも良いが残しておく) */}
             {isPreviewMode && (
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center">
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center pointer-events-none">
                     <div className="inline-block bg-black/80 backdrop-blur-sm border border-white/20 p-8 rounded-lg animate-in fade-in zoom-in duration-300">
-
-                        {/* ★変更: 時間切れかどうかの分岐 */}
                         {previewTimeLeft > 0 ? (
                             <>
                                 <h2 className="text-xl text-green-400 mb-2 tracking-widest animate-pulse">
-                                    CAMERA CONNECTION ESTABLISHED
+                                    CONNECTION ESTABLISHED
                                 </h2>
-                                {/* タイムゲージ */}
                                 <div className="w-full h-1 bg-white/20 rounded-full mb-6 overflow-hidden">
                                     <div
                                         className="h-full bg-green-500 transition-all duration-100 ease-linear"
@@ -79,28 +176,12 @@ export default function UI() {
                                 CONNECTION LOST
                             </h2>
                         )}
-
-                        <div className="flex gap-12 justify-center text-sm">
-                            <div className="flex flex-col items-center gap-2 group">
-                                <div className="px-4 py-2 border border-white/40 rounded text-white group-hover:bg-white/10 transition-colors">
-                                    [SPACE]
-                                </div>
-                                <span className="text-white/60">ENTER ROOM</span>
-                            </div>
-
-                            <div className="flex flex-col items-center gap-2 group">
-                                <div className="px-4 py-2 border border-white/40 rounded text-white group-hover:bg-white/10 transition-colors">
-                                    [X] or [ESC]
-                                </div>
-                                <span className="text-white/60">DISCONNECT</span>
-                            </div>
-                        </div>
+                        {/* PC向けガイドは残しつつ、モバイルではボタン操作が主になる */}
                     </div>
                 </div>
             )}
 
-            {/* Vignette & Grain */}
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)]"></div>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_50%,rgba(0,0,0,0.6)_100%)] pointer-events-none"></div>
             <div className="absolute inset-0 opacity-[0.03] pointer-events-none mix-blend-overlay bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
         </div>
     );

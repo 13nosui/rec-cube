@@ -28,6 +28,10 @@ export default function Player() {
     const roomStartTime = useGameStore(state => state.roomStartTime);
     const isClimbing = useGameStore(state => state.isClimbing);
 
+    // モバイル対応
+    const touchInput = useGameStore(state => state.touchInput);
+    const lookVelocity = useGameStore(state => state.lookVelocity);
+
     // プレビュー関連
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
     const previewTarget = useGameStore(state => state.previewTarget);
@@ -41,10 +45,11 @@ export default function Player() {
 
     const isPreviewInitialized = useRef(false);
 
-    // 【削除】[R]キーのイベントリスナーを削除しました
-
     useFrame((state, delta) => {
-        if (!rb.current || !isLocked) return;
+        // ★修正: タッチ操作時は isLocked が false でも動けるようにする
+        if (!rb.current) return;
+        const isTouchActive = Object.values(touchInput).some(v => v) || lookVelocity.x !== 0 || lookVelocity.y !== 0;
+        if (!isLocked && !isTouchActive) return;
 
         // --- プレビューモード中の処理 ---
         if (isPreviewMode) {
@@ -75,6 +80,17 @@ export default function Player() {
 
         // --- 以下、通常モード ---
 
+        // ★視点操作 (モバイル用)
+        if (lookVelocity.x !== 0 || lookVelocity.y !== 0) {
+            // Y軸回転 (左右)
+            camera.rotation.y -= lookVelocity.x * delta * 2.0;
+            // X軸回転 (上下) - クランプ付き
+            const newPitch = camera.rotation.x - lookVelocity.y * delta * 2.0;
+            camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, newPitch));
+            // 本来はEuler角の操作よりQuaternionが望ましいが、簡易実装として
+            camera.rotation.z = 0;
+        }
+
         if (floor !== lastFloor.current) {
             rb.current.setTranslation({ x: 0, y: 2, z: 2 }, true);
             rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
@@ -83,7 +99,12 @@ export default function Player() {
             return;
         }
 
-        const { forward, backward, left, right } = getKeys();
+        // ★入力のマージ
+        const k = getKeys();
+        const forward = k.forward || touchInput.forward;
+        const backward = k.backward || touchInput.backward;
+        const left = k.left || touchInput.left;
+        const right = k.right || touchInput.right;
 
         // 移動ロジック
         if (isClimbing) {
@@ -91,11 +112,15 @@ export default function Player() {
             const climbVelocity = new THREE.Vector3();
             if (forward) climbVelocity.y += 1;
             if (backward) climbVelocity.y -= 1;
+
+            // 梯子での左右移動もカメラ基準にする
             const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
             cameraRight.y = 0;
             cameraRight.normalize();
+
             if (left) climbVelocity.add(cameraRight.clone().multiplyScalar(-1));
             if (right) climbVelocity.add(cameraRight);
+
             climbVelocity.normalize().multiplyScalar(CLIMB_SPEED);
             rb.current.setLinvel({ x: climbVelocity.x, y: climbVelocity.y, z: climbVelocity.z }, true);
             const pos = rb.current.translation();
@@ -103,13 +128,21 @@ export default function Player() {
         } else {
             rb.current.setGravityScale(1, true);
             const velocity = new THREE.Vector3();
+            // Z軸: 前後
             if (forward) velocity.z -= 1;
             if (backward) velocity.z += 1;
+            // X軸: 左右
             if (left) velocity.x -= 1;
             if (right) velocity.x += 1;
+
             if (velocity.length() > 0) {
-                velocity.normalize().multiplyScalar(MOVE_SPEED).applyQuaternion(camera.quaternion);
+                // カメラの向きに合わせて移動ベクトルを回転
+                // ただしY軸回転のみを適用したい（空を飛ばないように）
+                const euler = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
+                velocity.applyEuler(euler);
+                velocity.normalize().multiplyScalar(MOVE_SPEED);
             }
+
             const currentVel = rb.current.linvel();
             velocity.y = currentVel.y;
             rb.current.setLinvel(velocity, true);
@@ -126,9 +159,8 @@ export default function Player() {
             }
         }
 
+        // ... (以下、ログ記録処理は変更なし) ...
         const pos = rb.current.translation();
-
-        // 移動ログ記録
         lastLogTime.current += delta;
         if (lastLogTime.current >= LOG_INTERVAL) {
             const vel = rb.current.linvel();
@@ -141,9 +173,6 @@ export default function Player() {
             lastLogTime.current = 0;
         }
 
-        // 【削除】デコイの手動記録ロジックを削除しました
-
-        // 視線ログ記録
         lastGazeTime.current += delta;
         if (lastGazeTime.current >= GAZE_INTERVAL) {
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);

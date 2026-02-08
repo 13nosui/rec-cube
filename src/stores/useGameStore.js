@@ -21,7 +21,7 @@ const ANOMALY_TYPES = [
   'EYES_CLUSTER'  // 壁に大量の目がある
 ];
 
-// ★定数追加: プレビュー制限時間 (15秒)
+// プレビュー制限時間 (15秒)
 const MAX_PREVIEW_TIME = 15000;
 
 export const useGameStore = create((set, get) => ({
@@ -35,7 +35,7 @@ export const useGameStore = create((set, get) => ({
   currentMoveLogs: [],
   currentGazeLogs: [],
 
-  // ★追加: プレビュー残り時間
+  // プレビュー残り時間
   previewTimeLeft: MAX_PREVIEW_TIME,
   maxPreviewTime: MAX_PREVIEW_TIME,
 
@@ -52,7 +52,17 @@ export const useGameStore = create((set, get) => ({
   nextRoomStatus: 'SAFE',
   anomalyType: null,
 
-  // ★追加: 時間消費アクション
+  // --- モバイル対応: 入力状態 ---
+  nearbyHatch: null, // 近くにあるハッチの方向 ('front', 'back' etc)
+  setNearbyHatch: (dir) => set({ nearbyHatch: dir }),
+
+  touchInput: { forward: false, backward: false, left: false, right: false },
+  setTouchInput: (input) => set((state) => ({ touchInput: { ...state.touchInput, ...input } })),
+
+  lookVelocity: { x: 0, y: 0 }, // 視点移動速度
+  setLookVelocity: (v) => set({ lookVelocity: v }),
+
+  // 時間消費アクション
   consumePreviewTime: (delta) => {
     const current = get().previewTimeLeft;
     if (current > 0) {
@@ -61,17 +71,12 @@ export const useGameStore = create((set, get) => ({
   },
 
   enterPreviewMode: (target) => {
-    // 【修正】 前の階層のログを取得するように変更
     const previousLogs = get().previousMoveLogs;
-
-    // 【追加】現在の階層を取得
     const floor = get().floor;
-
-    // 【変更】Floor 1 なら異常なし(false)、それ以外なら80%の確率で異常
+    // Floor 1 なら異常なし(false)、それ以外なら80%の確率で異常
     const isAnomaly = floor === 1 ? false : Math.random() < 0.8;
 
     let anomalyType = null;
-
     if (isAnomaly) {
       anomalyType = ANOMALY_TYPES[Math.floor(Math.random() * ANOMALY_TYPES.length)];
       get().addSystemLog(`DEBUG: ${anomalyType}`);
@@ -82,7 +87,6 @@ export const useGameStore = create((set, get) => ({
       previewTarget: target,
       nextRoomStatus: isAnomaly ? 'ANOMALY' : 'SAFE',
       anomalyType: anomalyType,
-      // 【修正】前の階層の動きをデコイデータとしてセット
       decoyLogs: [...previousLogs]
     });
   },
@@ -96,7 +100,6 @@ export const useGameStore = create((set, get) => ({
     const { nextRoomStatus, nextRoom, addSystemLog } = get();
 
     if (nextRoomStatus === 'ANOMALY') {
-      // ゲームオーバー処理
       addSystemLog("CRITICAL ERROR: FATAL ANOMALY");
       addSystemLog("SYSTEM REBOOTING...");
 
@@ -112,7 +115,8 @@ export const useGameStore = create((set, get) => ({
         previousMoveLogs: [],
         decoyLogs: [],
         roomStartTime: Date.now(),
-        previewTimeLeft: MAX_PREVIEW_TIME // ★リセット
+        previewTimeLeft: MAX_PREVIEW_TIME, // リセット
+        nearbyHatch: null // リセット
       });
     } else {
       addSystemLog("CONNECTION SECURE. MOVING...");
@@ -140,7 +144,8 @@ export const useGameStore = create((set, get) => ({
       nextRoomStatus: 'SAFE',
       anomalyType: null,
       systemLogs: [`ROOM ${String(nextFloor).padStart(4, '0')} ENTERED.`, ...state.systemLogs].slice(0, 5),
-      previewTimeLeft: MAX_PREVIEW_TIME // ★リセット
+      previewTimeLeft: MAX_PREVIEW_TIME, // リセット
+      nearbyHatch: null // リセット
     };
   }),
 
