@@ -14,41 +14,30 @@ const getThemeColor = (floor) => {
   return Object.values(colorObj)[9];
 };
 
+// 異常のバリエーション定義
+const ANOMALY_TYPES = [
+  'GHOST_FAST',   // 亡霊が高速で動く
+  'GHOST_STARE',  // 亡霊がじっとこちらを見ている
+  'EYES_CLUSTER'  // 壁に大量の目がある
+];
+
 export const useGameStore = create((set, get) => ({
   floor: 1,
   themeColor: getThemeColor(1),
   availableHatches: 6,
   systemLogs: ["SYSTEM INITIALIZED...", "RECORDING STARTED..."],
 
-  // --- 既存のログシステム ---
   previousMoveLogs: [],
   previousGazeLogs: [],
   currentMoveLogs: [],
   currentGazeLogs: [],
+
   roomStartTime: Date.now(),
-
-  // --- 【追加】デジタル・デコイ機能 ---
-  decoyLogs: [],          // 録画されたデコイのデータ
-  isRecordingDecoy: false, // 録画中かどうか
-  decoyStartTime: 0,      // 録画開始時刻
-
-  startDecoyRecording: () => set({
-    isRecordingDecoy: true,
-    decoyLogs: [],
-    decoyStartTime: Date.now()
-  }),
-
-  stopDecoyRecording: () => set({
-    isRecordingDecoy: false
-  }),
-
-  addDecoyLog: (log) => set((state) => ({
-    decoyLogs: [...state.decoyLogs, log]
-  })),
-  // ----------------------------
-
   isClimbing: false,
   setIsClimbing: (isClimbing) => set({ isClimbing }),
+
+  // --- デコイ機能 (自動化) ---
+  decoyLogs: [], // プレビュー用にスナップショットされたログ
 
   // --- プレビュー機能 ---
   isPreviewMode: false,
@@ -57,20 +46,25 @@ export const useGameStore = create((set, get) => ({
   anomalyType: null,
 
   enterPreviewMode: (target) => {
-    // 異常発生率 (バランス調整で30%に戻します)
-    const isAnomaly = Math.random() < 0.3;
+    // 【変更】プレビュー開始時に、ここまでの現在の行動ログをデコイとしてコピー
+    const currentLogs = get().currentMoveLogs;
 
-    // 異常の種類 (デコイの破壊演出には直接影響しませんが、ログ用に残します)
+    // 異常発生率 (30%)
+    const isAnomaly = Math.random() < 0.3;
     let anomalyType = null;
+
     if (isAnomaly) {
-      anomalyType = 'ANOMALY_DETECTED';
+      anomalyType = ANOMALY_TYPES[Math.floor(Math.random() * ANOMALY_TYPES.length)];
+      get().addSystemLog(`DEBUG: ${anomalyType}`);
     }
 
     set({
       isPreviewMode: true,
       previewTarget: target,
       nextRoomStatus: isAnomaly ? 'ANOMALY' : 'SAFE',
-      anomalyType: anomalyType
+      anomalyType: anomalyType,
+      // 現在の動きをデコイデータとしてセット
+      decoyLogs: [...currentLogs]
     });
   },
 
@@ -97,7 +91,7 @@ export const useGameStore = create((set, get) => ({
         anomalyType: null,
         currentMoveLogs: [],
         previousMoveLogs: [],
-        decoyLogs: [], // デコイもリセット
+        decoyLogs: [],
         roomStartTime: Date.now()
       });
     } else {

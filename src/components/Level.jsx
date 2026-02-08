@@ -1,9 +1,71 @@
 import { RigidBody, CuboidCollider } from '@react-three/rapier';
-import { Grid } from '@react-three/drei';
+import { Grid, Instance, Instances } from '@react-three/drei';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGameStore } from '../stores/useGameStore';
 import * as THREE from 'three';
+
+// --- 破壊エフェクト（赤いワイヤーボクセルの飛散） ---
+const ShatterEffect = ({ position }) => {
+    const particleCount = 40;
+    const particles = useMemo(() => {
+        return new Array(particleCount).fill(0).map(() => ({
+            velocity: new THREE.Vector3(
+                (Math.random() - 0.5) * 5,
+                (Math.random() - 0.5) * 5 + 2, // 少し上に跳ねる
+                (Math.random() - 0.5) * 5
+            ),
+            rotation: new THREE.Vector3(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            ),
+            scale: 0.1 + Math.random() * 0.1
+        }));
+    }, []);
+
+    const meshRef = useRef();
+
+    useFrame((state, delta) => {
+        if (!meshRef.current) return;
+
+        // 子要素（Instances）の更新はやや複雑なので、
+        // ここでは簡易的に個別のmeshをレンダリングするか、
+        // あるいはgroup内のchildrenを操作する
+        meshRef.current.children.forEach((child, i) => {
+            const p = particles[i];
+
+            // 重力
+            p.velocity.y -= 9.8 * delta;
+
+            // 位置更新
+            child.position.add(p.velocity.clone().multiplyScalar(delta));
+
+            // 回転
+            child.rotation.x += p.rotation.x * delta;
+            child.rotation.y += p.rotation.y * delta;
+
+            // 地面衝突 (簡易)
+            if (child.position.y < 0) {
+                child.position.y = 0;
+                p.velocity.y *= -0.5;
+                p.velocity.x *= 0.8;
+                p.velocity.z *= 0.8;
+            }
+        });
+    });
+
+    return (
+        <group position={position} ref={meshRef}>
+            {particles.map((p, i) => (
+                <mesh key={i} scale={p.scale}>
+                    <boxGeometry args={[1, 1, 1]} />
+                    <meshBasicMaterial color="#ff0000" wireframe={true} />
+                </mesh>
+            ))}
+        </group>
+    );
+};
 
 // --- プレビュー用: デコイ（身代わり）コンポーネント ---
 const PreviewPhantom = () => {
@@ -16,42 +78,35 @@ const PreviewPhantom = () => {
     // デコイが「死んだ」かどうか
     const [isDead, setIsDead] = useState(false);
 
-    // 異常な部屋の場合、デコイが死ぬタイミングをランダムに決定 (1秒〜録画時間の半分くらいで)
+    // 死亡タイミング
     const deathTime = useMemo(() => {
         if (nextRoomStatus !== 'ANOMALY') return Infinity;
         if (!decoyLogs || decoyLogs.length === 0) return 0;
 
         const maxTime = decoyLogs[decoyLogs.length - 1].time;
-        // 録画時間の 20% 〜 80% の間のどこかで死ぬ
-        return maxTime * (0.2 + Math.random() * 0.6);
+        // 録画時間の 30% 〜 70% の間のどこかで死ぬ
+        return maxTime * (0.3 + Math.random() * 0.4);
     }, [nextRoomStatus, decoyLogs]);
 
     useFrame((state, delta) => {
         if (!meshRef.current || !decoyLogs || decoyLogs.length < 2) return;
-        if (isDead) return; // 死んでたら動かない
+        if (isDead) return;
 
-        // 時間を進める
-        let newTime = playbackTime + (delta * 1000); // ms変換
+        let newTime = playbackTime + (delta * 1000);
 
         // 異常発生時刻を超えたら死亡
         if (newTime > deathTime) {
             setIsDead(true);
-            // 死亡演出: 潰れる & 赤くなる
-            meshRef.current.scale.y = 0.1;
-            meshRef.current.position.y = 0.1;
-            meshRef.current.material.color.set("#ff0000"); // 赤色
             return;
         }
 
-        // ループ再生
         const lastLog = decoyLogs[decoyLogs.length - 1];
         if (newTime > lastLog.time) {
-            newTime = 0; // 最初に戻る
+            newTime = 0; // ループ
         }
         setPlaybackTime(newTime);
 
-        // --- 位置の補間 ---
-        // 現在時刻の直後のログを探す
+        // 位置補間
         let nextIndex = decoyLogs.findIndex(log => log.time > newTime);
         if (nextIndex === -1) nextIndex = decoyLogs.length - 1;
         if (nextIndex === 0) nextIndex = 1;
@@ -66,20 +121,24 @@ const PreviewPhantom = () => {
         const y = THREE.MathUtils.lerp(prevLog.pos[1], nextLog.pos[1], alpha);
         const z = THREE.MathUtils.lerp(prevLog.pos[2], nextLog.pos[2], alpha);
 
-        // 位置更新
         meshRef.current.position.set(x, y, z);
-
-        // 向き更新 (進行方向を向く)
         meshRef.current.lookAt(nextLog.pos[0], y, nextLog.pos[2]);
     });
 
     if (!decoyLogs || decoyLogs.length === 0) return null;
 
+    if (isDead) {
+        // 死亡時は本体を隠し、破壊エフェクトを表示
+        return (
+            <ShatterEffect position={meshRef.current ? meshRef.current.position : [0, 0, 0]} />
+        );
+    }
+
     return (
         <mesh ref={meshRef}>
-            <boxGeometry args={[0.75, 1.8, 0.75]} />
+            <boxGeometry args={[0.75, 0.75, 1.8]} />
             <meshBasicMaterial
-                color="#00ff00" // デコイはプレイヤーの味方なので緑色っぽく
+                color="#00ff00"
                 wireframe={true}
                 transparent
                 opacity={0.6}
@@ -96,17 +155,15 @@ const PreviewRoom = () => {
 
     const position = [0, -1000, 0];
     const size = 10;
-    // 部屋の色はカモフラージュで白（またはグレー）
     const nextThemeColor = "#444444";
 
-    // デコイデータがない場合の警告
     const showWarning = !decoyLogs || decoyLogs.length === 0;
 
     if (!isPreviewMode) return null;
 
     return (
         <group position={position}>
-            {/* 部屋の構造 (変更なし) */}
+            {/* 部屋の構造 */}
             <mesh position={[0, -0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[0, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
             <mesh position={[0, size + 0.5, 0]}><boxGeometry args={[size, 1, size]} /><meshBasicMaterial color="#000000" /></mesh>
@@ -117,7 +174,7 @@ const PreviewRoom = () => {
             <Grid position={[0, size / 2, size / 2]} rotation={[-Math.PI / 2, 0, 0]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
             <mesh position={[-size / 2 - 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshBasicMaterial color="#000000" /></mesh>
             <Grid position={[-size / 2, size / 2, 0]} rotation={[0, 0, -Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
-            <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshBasicMaterial color="#000000" /></mesh>
+            <mesh position={[size / 2 + 0.5, size / 2, 0]}><boxGeometry args={[1, size, size]} /><meshStandardMaterial color="#000000" /></mesh>
             <Grid position={[size / 2, size / 2, 0]} rotation={[0, 0, Math.PI / 2]} args={[10, 10]} cellColor={nextThemeColor} sectionColor={nextThemeColor} />
 
             {/* デコイ表示 */}
@@ -130,15 +187,13 @@ const PreviewRoom = () => {
                         <boxGeometry args={[3, 1, 0.1]} />
                         <meshBasicMaterial color="red" />
                     </mesh>
-                    {/* Textコンポーネントは削除したので、単純な赤い板で警告 */}
                 </group>
             )}
         </group>
     );
 };
 
-// ... 以下、GridPlane, Ladder, Hatch, Levelコンポーネント (既存のまま) ...
-// (実際のファイルではLevel.jsx全体を記述します)
+// ... (以下、GridPlane, Ladder, Hatch, Levelコンポーネントは既存のまま) ...
 const GridPlane = ({ position, rotation, color = "#ffffff" }) => (
     <Grid
         position={position}

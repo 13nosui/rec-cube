@@ -5,9 +5,8 @@ export default function UI() {
     const systemLogs = useGameStore(state => state.systemLogs);
     const themeColor = useGameStore(state => state.themeColor);
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
-    // 【追加】録画状態
-    const isRecordingDecoy = useGameStore(state => state.isRecordingDecoy);
-    const decoyLogs = useGameStore(state => state.decoyLogs);
+
+    // 【削除】録画状態のUIを削除
 
     return (
         <div className="absolute inset-0 pointer-events-none select-none overflow-hidden font-mono">
@@ -38,20 +37,12 @@ export default function UI() {
                 ))}
             </div>
 
-            {/* 【追加】デコイ録画インジケーター */}
+            {/* 自動録画インジケーター（右上に控えめに表示） */}
             <div className="absolute top-8 right-8 flex flex-col items-end gap-2">
-                {isRecordingDecoy && (
-                    <div className="flex items-center gap-2 text-red-500 animate-pulse">
-                        <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                        <span className="font-bold tracking-widest">RECORDING DECOY...</span>
-                    </div>
-                )}
-                {!isRecordingDecoy && decoyLogs.length > 0 && (
-                    <div className="text-green-500 text-sm tracking-widest border border-green-500/30 px-2 py-1 rounded">
-                        DECOY DATA READY [{decoyLogs.length} FRAMES]
-                    </div>
-                )}
-                <div className="text-xs text-white/40">PRESS [R] TO REC/STOP</div>
+                <div className="flex items-center gap-2 text-red-500/50">
+                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs tracking-widest">AUTO-REC</span>
+                </div>
             </div>
 
 
@@ -84,13 +75,6 @@ export default function UI() {
                                 <span className="text-white/60">DISCONNECT</span>
                             </div>
                         </div>
-
-                        {/* 警告メッセージ */}
-                        {(!decoyLogs || decoyLogs.length === 0) && (
-                            <div className="mt-4 text-red-500 text-xs tracking-widest animate-bounce">
-                                WARNING: NO DECOY DATA FOUND
-                            </div>
-                        )}
                     </div>
                 </div>
             )}

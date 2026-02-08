@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { useRef, useState, useEffect } from 'react'; // useEffectを追加
+import { useRef, useState } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { PointerLockControls, useKeyboardControls } from '@react-three/drei';
 import { RigidBody, CapsuleCollider } from '@react-three/rapier';
@@ -32,45 +32,21 @@ export default function Player() {
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
     const previewTarget = useGameStore(state => state.previewTarget);
 
-    // デコイ関連
-    const isRecordingDecoy = useGameStore(state => state.isRecordingDecoy);
-    const startDecoyRecording = useGameStore(state => state.startDecoyRecording);
-    const stopDecoyRecording = useGameStore(state => state.stopDecoyRecording);
-    const addDecoyLog = useGameStore(state => state.addDecoyLog);
-    const decoyStartTime = useGameStore(state => state.decoyStartTime);
-
     const lastLogTime = useRef(0);
     const lastGazeTime = useRef(0);
     const lastStepTime = useRef(0);
-    const lastDecoyLogTime = useRef(0); // 追加
     const lastFloor = useRef(floor);
     const lastHitPoint = useRef(new THREE.Vector3(0, 0, 0));
     const stareCount = useRef(0);
 
     const isPreviewInitialized = useRef(false);
 
-    // [R]キー入力の監視
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (e.code === 'KeyR' && !isPreviewMode) {
-                if (isRecordingDecoy) {
-                    stopDecoyRecording();
-                    addSystemLog("DECOY RECORDING SAVED.");
-                } else {
-                    startDecoyRecording();
-                    addSystemLog("REC: DECOY SEQUENCE STARTED...");
-                }
-            }
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isRecordingDecoy, isPreviewMode, startDecoyRecording, stopDecoyRecording, addSystemLog]);
-
+    // 【削除】[R]キーのイベントリスナーを削除しました
 
     useFrame((state, delta) => {
         if (!rb.current || !isLocked) return;
 
-        // --- プレビューモード中の処理 (変更なし) ---
+        // --- プレビューモード中の処理 ---
         if (isPreviewMode) {
             rb.current.setLinvel({ x: 0, y: 0, z: 0 }, true);
             if (!isPreviewInitialized.current) {
@@ -109,7 +85,7 @@ export default function Player() {
 
         const { forward, backward, left, right } = getKeys();
 
-        // ... 移動ロジック (省略なし、既存のまま) ...
+        // 移動ロジック
         if (isClimbing) {
             rb.current.setGravityScale(0, true);
             const climbVelocity = new THREE.Vector3();
@@ -152,7 +128,7 @@ export default function Player() {
 
         const pos = rb.current.translation();
 
-        // 1. 通常の移動ログ (既存)
+        // 移動ログ記録
         lastLogTime.current += delta;
         if (lastLogTime.current >= LOG_INTERVAL) {
             const vel = rb.current.linvel();
@@ -165,22 +141,11 @@ export default function Player() {
             lastLogTime.current = 0;
         }
 
-        // 2. 【追加】デコイの録画ログ
-        if (isRecordingDecoy) {
-            lastDecoyLogTime.current += delta;
-            // デコイは少し細かく記録する (0.1s間隔)
-            if (lastDecoyLogTime.current >= 0.1) {
-                addDecoyLog({
-                    pos: [pos.x, pos.y, pos.z],
-                    time: Date.now() - decoyStartTime
-                });
-                lastDecoyLogTime.current = 0;
-            }
-        }
+        // 【削除】デコイの手動記録ロジックを削除しました
 
+        // 視線ログ記録
         lastGazeTime.current += delta;
         if (lastGazeTime.current >= GAZE_INTERVAL) {
-            // ... (視線ログのロジック、既存のまま) ...
             raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
             const intersects = raycaster.intersectObjects(scene.children, true);
             if (intersects.length > 0) {
