@@ -21,6 +21,9 @@ const ANOMALY_TYPES = [
   'EYES_CLUSTER'  // 壁に大量の目がある
 ];
 
+// ★定数追加: プレビュー制限時間 (15秒)
+const MAX_PREVIEW_TIME = 15000;
+
 export const useGameStore = create((set, get) => ({
   floor: 1,
   themeColor: getThemeColor(1),
@@ -31,6 +34,10 @@ export const useGameStore = create((set, get) => ({
   previousGazeLogs: [],
   currentMoveLogs: [],
   currentGazeLogs: [],
+
+  // ★追加: プレビュー残り時間
+  previewTimeLeft: MAX_PREVIEW_TIME,
+  maxPreviewTime: MAX_PREVIEW_TIME,
 
   roomStartTime: Date.now(),
   isClimbing: false,
@@ -44,6 +51,14 @@ export const useGameStore = create((set, get) => ({
   previewTarget: null,
   nextRoomStatus: 'SAFE',
   anomalyType: null,
+
+  // ★追加: 時間消費アクション
+  consumePreviewTime: (delta) => {
+    const current = get().previewTimeLeft;
+    if (current > 0) {
+      set({ previewTimeLeft: Math.max(0, current - delta) });
+    }
+  },
 
   enterPreviewMode: (target) => {
     // 【修正】 前の階層のログを取得するように変更
@@ -96,7 +111,8 @@ export const useGameStore = create((set, get) => ({
         currentMoveLogs: [],
         previousMoveLogs: [],
         decoyLogs: [],
-        roomStartTime: Date.now()
+        roomStartTime: Date.now(),
+        previewTimeLeft: MAX_PREVIEW_TIME // ★リセット
       });
     } else {
       addSystemLog("CONNECTION SECURE. MOVING...");
@@ -123,7 +139,8 @@ export const useGameStore = create((set, get) => ({
       previewTarget: null,
       nextRoomStatus: 'SAFE',
       anomalyType: null,
-      systemLogs: [`ROOM ${String(nextFloor).padStart(4, '0')} ENTERED.`, ...state.systemLogs].slice(0, 5)
+      systemLogs: [`ROOM ${String(nextFloor).padStart(4, '0')} ENTERED.`, ...state.systemLogs].slice(0, 5),
+      previewTimeLeft: MAX_PREVIEW_TIME // ★リセット
     };
   }),
 

@@ -154,6 +154,10 @@ const PreviewPhantom = () => {
 // --- プレビュー用の部屋コンポーネント ---
 const PreviewRoom = () => {
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
+    // ★追加
+    const previewTimeLeft = useGameStore(state => state.previewTimeLeft);
+    const consumePreviewTime = useGameStore(state => state.consumePreviewTime);
+
     const nextRoomStatus = useGameStore(state => state.nextRoomStatus);
     const decoyLogs = useGameStore(state => state.decoyLogs);
     const floor = useGameStore(state => state.floor);
@@ -165,7 +169,20 @@ const PreviewRoom = () => {
     // Floor 1以外で、ログがない場合のみ警告を表示する
     const showWarning = floor > 1 && (!decoyLogs || decoyLogs.length === 0);
 
+    // ★追加: 時間消費ロジック
+    useFrame((state, delta) => {
+        if (isPreviewMode && previewTimeLeft > 0) {
+            // delta (秒) をミリ秒に変換して消費
+            consumePreviewTime(delta * 1000);
+        }
+    });
+
     if (!isPreviewMode) return null;
+
+    // ★追加: 時間切れなら何も表示しない (暗闇)
+    if (previewTimeLeft <= 0) {
+        return null;
+    }
 
     return (
         <group position={position}>

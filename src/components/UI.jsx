@@ -5,6 +5,9 @@ export default function UI() {
     const systemLogs = useGameStore(state => state.systemLogs);
     const themeColor = useGameStore(state => state.themeColor);
     const isPreviewMode = useGameStore(state => state.isPreviewMode);
+    // ★追加
+    const previewTimeLeft = useGameStore(state => state.previewTimeLeft);
+    const maxPreviewTime = useGameStore(state => state.maxPreviewTime);
 
     // 【削除】録画状態のUIを削除
 
@@ -56,9 +59,26 @@ export default function UI() {
             {isPreviewMode && (
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full text-center">
                     <div className="inline-block bg-black/80 backdrop-blur-sm border border-white/20 p-8 rounded-lg animate-in fade-in zoom-in duration-300">
-                        <h2 className="text-xl text-green-400 mb-6 tracking-widest animate-pulse">
-                            CAMERA CONNECTION ESTABLISHED
-                        </h2>
+
+                        {/* ★変更: 時間切れかどうかの分岐 */}
+                        {previewTimeLeft > 0 ? (
+                            <>
+                                <h2 className="text-xl text-green-400 mb-2 tracking-widest animate-pulse">
+                                    CAMERA CONNECTION ESTABLISHED
+                                </h2>
+                                {/* タイムゲージ */}
+                                <div className="w-full h-1 bg-white/20 rounded-full mb-6 overflow-hidden">
+                                    <div
+                                        className="h-full bg-green-500 transition-all duration-100 ease-linear"
+                                        style={{ width: `${(previewTimeLeft / maxPreviewTime) * 100}%` }}
+                                    />
+                                </div>
+                            </>
+                        ) : (
+                            <h2 className="text-xl text-red-500 mb-6 tracking-widest animate-pulse">
+                                CONNECTION LOST
+                            </h2>
+                        )}
 
                         <div className="flex gap-12 justify-center text-sm">
                             <div className="flex flex-col items-center gap-2 group">
