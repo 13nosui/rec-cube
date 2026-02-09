@@ -60,6 +60,13 @@ export default function UI() {
 
     return (
         <div className="absolute inset-0 pointer-events-none select-none overflow-hidden font-mono">
+            {/* ★追加: 縦画面時の警告オーバーレイ */}
+            <div id="landscape-warning">
+                <div className="rotate-phone-icon"></div>
+                <p className="font-bold tracking-widest text-lg">PLEASE ROTATE DEVICE</p>
+                <p className="text-xs text-white/50 mt-2">LANDSCAPE MODE REQUIRED</p>
+            </div>
+
             {/* Header, Logs, Auto-rec はそのまま */}
             <div className="absolute top-8 left-8 flex flex-col gap-2">
                 <div className="flex items-center gap-4">
