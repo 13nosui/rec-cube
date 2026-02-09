@@ -46,7 +46,6 @@ export default function Player() {
     const isPreviewInitialized = useRef(false);
 
     useFrame((state, delta) => {
-        // ★修正: タッチ操作時は isLocked が false でも動けるようにする
         if (!rb.current) return;
         const isTouchActive = Object.values(touchInput).some(v => v) || lookVelocity.x !== 0 || lookVelocity.y !== 0;
         if (!isLocked && !isTouchActive) return;
@@ -80,14 +79,11 @@ export default function Player() {
 
         // --- 以下、通常モード ---
 
-        // ★視点操作 (モバイル用)
+        // 視点操作 (モバイル用)
         if (lookVelocity.x !== 0 || lookVelocity.y !== 0) {
-            // Y軸回転 (左右)
             camera.rotation.y -= lookVelocity.x * delta * 2.0;
-            // X軸回転 (上下) - クランプ付き
             const newPitch = camera.rotation.x - lookVelocity.y * delta * 2.0;
             camera.rotation.x = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, newPitch));
-            // 本来はEuler角の操作よりQuaternionが望ましいが、簡易実装として
             camera.rotation.z = 0;
         }
 
@@ -99,7 +95,6 @@ export default function Player() {
             return;
         }
 
-        // ★入力のマージ
         const k = getKeys();
         const forward = k.forward || touchInput.forward;
         const backward = k.backward || touchInput.backward;
@@ -113,33 +108,45 @@ export default function Player() {
             if (forward) climbVelocity.y += 1;
             if (backward) climbVelocity.y -= 1;
 
-            // 梯子での左右移動もカメラ基準にする
-            const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-            cameraRight.y = 0;
-            cameraRight.normalize();
+            // ★修正: ベクトルベースの計算に変更
+            const forwardDir = new THREE.Vector3();
+            camera.getWorldDirection(forwardDir);
+            forwardDir.y = 0;
+            forwardDir.normalize();
 
-            if (left) climbVelocity.add(cameraRight.clone().multiplyScalar(-1));
-            if (right) climbVelocity.add(cameraRight);
+            const rightDir = new THREE.Vector3();
+            rightDir.crossVectors(forwardDir, camera.up).normalize();
+
+            if (left) climbVelocity.sub(rightDir);
+            if (right) climbVelocity.add(rightDir);
 
             climbVelocity.normalize().multiplyScalar(CLIMB_SPEED);
             rb.current.setLinvel({ x: climbVelocity.x, y: climbVelocity.y, z: climbVelocity.z }, true);
             const pos = rb.current.translation();
             camera.position.set(pos.x, pos.y + 0.7, pos.z);
+
         } else {
             rb.current.setGravityScale(1, true);
             const velocity = new THREE.Vector3();
-            // Z軸: 前後
-            if (forward) velocity.z -= 1;
-            if (backward) velocity.z += 1;
-            // X軸: 左右
-            if (left) velocity.x -= 1;
-            if (right) velocity.x += 1;
+
+            // ★修正: ベクトルベースの計算に変更 (Euler角への依存を排除)
+            // 1. カメラの前方ベクトルを取得
+            const forwardDir = new THREE.Vector3();
+            camera.getWorldDirection(forwardDir);
+            forwardDir.y = 0; // 水平移動のみにするためYを潰す
+            forwardDir.normalize();
+
+            // 2. カメラの右方向ベクトルを計算 (Forward x Up = Right)
+            const rightDir = new THREE.Vector3();
+            rightDir.crossVectors(forwardDir, camera.up).normalize();
+
+            // 3. 入力に応じてベクトルを加算
+            if (forward) velocity.add(forwardDir);
+            if (backward) velocity.sub(forwardDir);
+            if (right) velocity.add(rightDir);
+            if (left) velocity.sub(rightDir);
 
             if (velocity.length() > 0) {
-                // カメラの向きに合わせて移動ベクトルを回転
-                // ただしY軸回転のみを適用したい（空を飛ばないように）
-                const euler = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
-                velocity.applyEuler(euler);
                 velocity.normalize().multiplyScalar(MOVE_SPEED);
             }
 
@@ -159,7 +166,7 @@ export default function Player() {
             }
         }
 
-        // ... (以下、ログ記録処理は変更なし) ...
+        // ... (以下変更なし) ...
         const pos = rb.current.translation();
         lastLogTime.current += delta;
         if (lastLogTime.current >= LOG_INTERVAL) {
